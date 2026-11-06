@@ -19,6 +19,7 @@ struct BuildingView: View {
             Text("Building screen \(name)")
                 .fatumStyle(.header)
         }
+        .screenPadding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

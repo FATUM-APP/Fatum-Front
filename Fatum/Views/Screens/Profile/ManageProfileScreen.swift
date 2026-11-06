@@ -106,16 +106,14 @@ struct ManageProfileScreen: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            VStack(spacing: layout.externalSpacing) {
                 // Profile picture
                 ProfileImagePicker(
                     selectedImage: $selectedImage,
                     existingImageURL: existingImageURL,
                     isLoading: isLoadingImage || isUploadingImage
                 )
-                .padding(layout.padding)
 
-               
                 // User fields
                 VStack(spacing: 0) {
                     ForEach(Array(fields.enumerated()), id: \.element) { index, field in
@@ -139,6 +137,7 @@ struct ManageProfileScreen: View {
                     }
                 }
             }
+            .screenPadding()
         }
         .overlay(alignment: .bottom) {
             if showToast {

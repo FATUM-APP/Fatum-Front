@@ -62,7 +62,6 @@ struct HomeView: View {
 
                             Spacer()
                         }
-                        .padding(.horizontal, layout.padding)
 
                         // Placeholder for recommendations
                         VStack(spacing: layout.internalSpacing) {

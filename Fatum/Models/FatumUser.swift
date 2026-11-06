@@ -2,6 +2,7 @@ import Foundation
 
 /// Mirrors the backend's `UserResponse` record.
 struct FatumUser: Codable, Equatable {
+    let userId: String
     let email: String
     var name: String
     let birthDate: Date
@@ -16,12 +17,13 @@ struct FatumUser: Codable, Equatable {
     var addresses: [FatumAddress]
 
     enum CodingKeys: String, CodingKey {
-        case email, name, birthDate, username, phoneNumber, role
+        case userId, email, name, birthDate, username, phoneNumber, role
         case verificationStatus, isActive, document, gender, documentType, addresses
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(String.self, forKey: .userId)
         email = try container.decode(String.self, forKey: .email)
         name = try container.decode(String.self, forKey: .name)
         birthDate = try container.decode(Date.self, forKey: .birthDate)
