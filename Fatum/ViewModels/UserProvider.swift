@@ -158,6 +158,7 @@ class UserProvider {
             let httpResponse = response as! HTTPURLResponse
 
             guard httpResponse.statusCode == 200 else {
+                Self.logErrorResponse("GET", "/users/me", statusCode: httpResponse.statusCode, data: data)
                 throw URLError(.badServerResponse)
             }
 
@@ -200,6 +201,7 @@ class UserProvider {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
             guard (200...299).contains(statusCode) else {
+                Self.logErrorResponse("PUT", "/users/update", statusCode: statusCode, data: data)
                 self.error = Self.parseErrorMessage(from: data) ?? "Error del servidor (\(statusCode))"
                 return false
             }
@@ -229,7 +231,10 @@ class UserProvider {
             let (data, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
-            guard statusCode == 200 else { return nil }
+            guard statusCode == 200 else {
+                Self.logErrorResponse("GET", "/profile-image/", statusCode: statusCode, data: data)
+                return nil
+            }
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let url = json["downloadUrl"] as? String {
                 return url
@@ -263,6 +268,7 @@ class UserProvider {
             print("DEBUG uploadProfileImage HTTP \(statusCode)")
 
             guard (200...299).contains(statusCode) else {
+                Self.logErrorResponse("PUT", "/profile-image/update", statusCode: statusCode, data: data)
                 self.error = Self.parseErrorMessage(from: data) ?? "Error del servidor (\(statusCode))"
                 return false
             }
@@ -315,6 +321,7 @@ class UserProvider {
             print("DEBUG uploadDocumentPdf HTTP \(statusCode)")
 
             guard (200...299).contains(statusCode) else {
+                Self.logErrorResponse("POST", "/documents/upload/single", statusCode: statusCode, data: data)
                 self.error = Self.parseErrorMessage(from: data) ?? "Error del servidor (\(statusCode))"
                 return false
             }
@@ -341,6 +348,7 @@ class UserProvider {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
             guard (200...299).contains(statusCode) else {
+                Self.logErrorResponse("POST", "/users/authenticate", statusCode: statusCode, data: data)
                 self.error = Self.parseErrorMessage(from: data) ?? "Error del servidor (\(statusCode))"
                 return false
             }
@@ -377,6 +385,12 @@ class UserProvider {
     }
 
     // MARK: - Helpers
+
+    /// Prints the raw body of a failed response so the backend's exact error shows in the console.
+    private static func logErrorResponse(_ method: String, _ path: String, statusCode: Int, data: Data) {
+        let body = data.isEmpty ? "<empty body>" : String(data: data, encoding: .utf8) ?? "<\(data.count) bytes, not UTF-8>"
+        print("DEBUG \(method) \(path) HTTP \(statusCode) response: \(body)")
+    }
 
     /// Tries to extract a human-readable error message from a JSON response body.
     private static func parseErrorMessage(from data: Data) -> String? {

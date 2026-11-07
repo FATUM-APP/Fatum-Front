@@ -76,6 +76,7 @@ class AddressProvider {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
             guard (200...299).contains(statusCode) else {
+                Self.logErrorResponse("GET", "/users/addresses/mine", statusCode: statusCode, data: data)
                 self.error = Self.parseErrorMessage(from: data) ?? "Error del servidor (\(statusCode))"
                 return nil
             }
@@ -96,7 +97,10 @@ class AddressProvider {
             let (data, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
-            guard statusCode == 200 else { return nil }
+            guard statusCode == 200 else {
+                Self.logErrorResponse("GET", "/users/addresses/principal", statusCode: statusCode, data: data)
+                return nil
+            }
             return try? JSONDecoder().decode(FatumAddress.self, from: data)
         } catch {
             print("DEBUG fetchPrincipalAddress error: \(error)")
@@ -118,6 +122,7 @@ class AddressProvider {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
             guard (200...299).contains(statusCode) else {
+                Self.logErrorResponse("POST", "/users/addresses/new", statusCode: statusCode, data: data)
                 self.error = Self.parseErrorMessage(from: data) ?? "Error del servidor (\(statusCode))"
                 return false
             }
@@ -156,6 +161,7 @@ class AddressProvider {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
             guard (200...299).contains(statusCode) else {
+                Self.logErrorResponse(method, path, statusCode: statusCode, data: data)
                 self.error = Self.parseErrorMessage(from: data) ?? "Error del servidor (\(statusCode))"
                 return false
             }
@@ -196,6 +202,12 @@ class AddressProvider {
         request.httpMethod = method
         request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
         return request
+    }
+
+    /// Prints the raw body of a failed response so the backend's exact error shows in the console.
+    private static func logErrorResponse(_ method: String, _ path: String, statusCode: Int, data: Data) {
+        let body = data.isEmpty ? "<empty body>" : String(data: data, encoding: .utf8) ?? "<\(data.count) bytes, not UTF-8>"
+        print("DEBUG \(method) \(path) HTTP \(statusCode) response: \(body)")
     }
 
     /// Tries to extract a human-readable error message from a JSON response body.

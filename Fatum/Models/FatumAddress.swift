@@ -34,7 +34,16 @@ struct FatumAddress: Codable, Equatable, Hashable {
 
     /// "City, State" built from whichever parts are present.
     var locationLine: String {
-        [city, state]
+        Self.joined([city, state])
+    }
+
+    /// "City, Country" built from whichever parts are present.
+    var cityAndCountry: String {
+        Self.joined([city, country])
+    }
+
+    private static func joined(_ parts: [String?]) -> String {
+        parts
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: ", ")

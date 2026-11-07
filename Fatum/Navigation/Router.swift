@@ -16,6 +16,7 @@ import SwiftUI
 /// There is one router per stack:
 /// - `Router<AuthRoute>` in `ContentView` (before sign-in).
 /// - `Router<ProfileRoute>` in `ProfileScreen` (after sign-in).
+/// - `Router<ProfileRoute>` in `HomeView`, to reach `AddressesScreen` from the address selector.
 ///
 /// Modal flows (`fullScreenCover`) are not part of a stack, so they keep using
 /// `@Environment(\.dismiss)`.
