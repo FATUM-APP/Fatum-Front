@@ -414,6 +414,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Fatum/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Fatum necesita acceso a la cámara para tomar tu foto de perfil y documento de identidad.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Fatum usa el micrófono para que puedas buscar servicios con tu voz.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Fatum necesita acceso a tu galería para seleccionar tu foto de perfil y documento de identidad.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Fatum reconoce tu voz en el dispositivo para saber cuándo terminaste de hablar y buscar lo que pediste.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -447,6 +451,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Fatum/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Fatum necesita acceso a la cámara para tomar tu foto de perfil y documento de identidad.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Fatum usa el micrófono para que puedas buscar servicios con tu voz.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Fatum necesita acceso a tu galería para seleccionar tu foto de perfil y documento de identidad.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Fatum reconoce tu voz en el dispositivo para saber cuándo terminaste de hablar y buscar lo que pediste.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

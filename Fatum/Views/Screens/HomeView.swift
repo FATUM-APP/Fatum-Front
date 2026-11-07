@@ -24,6 +24,7 @@ struct HomeView: View {
 
     @State private var showAllCategories = false
     @State private var showAddAddress = false
+    @State private var showVoiceSearch = false
     @State private var showToast = false
     @State private var toastMessage: String = ""
 
@@ -94,6 +95,10 @@ struct HomeView: View {
             .task {
                 await addressProvider.loadAddresses()
             }
+            // Downloads the Spanish speech model ahead of time so voice search is ready.
+            .task {
+                await VoiceRecorder.prepareSpeechModel()
+            }
             .task {
                 if catalogProvider.categories.isEmpty {
                     await catalogProvider.loadCategories()
@@ -111,7 +116,6 @@ struct HomeView: View {
             .sheet(isPresented: $showAllCategories) {
                 AllCategoriesSheet(
                     categories: availableCategories,
-                    selectedFilter: catalogProvider.selectedFilter,
                     onSelect: select
                 )
             }
@@ -143,9 +147,13 @@ struct HomeView: View {
             ExpandingSearchField(
                 placeholder: "Ej. Corte de cabello, manicure…",
                 text: $searchText,
-                style: .onContainer
+                style: .onContainer,
+                onMicTapped: { showVoiceSearch = true }
             )
             .padding(.top, layout.spacingSmall)
+            .fullScreenCover(isPresented: $showVoiceSearch) {
+                VoiceSearchScreen(onAudioRecorded: handleVoiceSearch)
+            }
         }
         .padding(layout.internalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -295,6 +303,14 @@ struct HomeView: View {
     }
 
     // MARK: - Actions
+
+    /// Receives the voice note recorded by the search field.
+    /// TODO: upload the file once the backend endpoint exists, then delete it.
+    private func handleVoiceSearch(_ recording: VoiceRecording) {
+        let fileURL = recording.fileURL
+        let size = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
+        print("Voice search recorded: \(fileURL.lastPathComponent) (\(size) bytes), transcript: \(recording.transcript ?? "none")")
+    }
 
     private func select(_ filter: CatalogProvider.ServiceFilter) {
         Task { await catalogProvider.selectFilter(filter) }

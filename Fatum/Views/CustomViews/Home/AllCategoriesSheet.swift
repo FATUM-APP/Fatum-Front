@@ -10,7 +10,6 @@ import SwiftUI
 /// width, 4 on regular. Picking one calls `onSelect` and dismisses.
 struct AllCategoriesSheet: View {
     let categories: [FatumCategory]
-    let selectedFilter: CatalogProvider.ServiceFilter?
     var onSelect: (CatalogProvider.ServiceFilter) -> Void
 
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -40,7 +39,7 @@ struct AllCategoriesSheet: View {
                             onSelect(filter)
                             dismiss()
                         } label: {
-                            CategoryCardView(filter: filter, isSelected: selectedFilter == filter)
+                            CategoryCardView(filter: filter)
                         }
                         .buttonStyle(.plain)
                     }
@@ -79,7 +78,6 @@ struct AllCategoriesSheet: View {
             FatumCategory(name: "Maquillaje", slug: "maquillaje", schedulingModel: "APPOINTMENT", isAble: true),
             FatumCategory(name: "Barbería", slug: "barberia", schedulingModel: "APPOINTMENT", isAble: true),
         ],
-        selectedFilter: .all,
         onSelect: { _ in }
     )
 }

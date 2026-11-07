@@ -9,9 +9,5 @@
 		<string>Poppins-Regular.ttf</string>
 		<string>Lato-Bold.ttf</string>
 	</array>
-	<key>NSCameraUsageDescription</key>
-	<string>Fatum necesita acceso a la cámara para tomar tu foto de perfil y documento de identidad.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Fatum necesita acceso a tu galería para seleccionar tu foto de perfil y documento de identidad.</string>
 </dict>
 </plist>

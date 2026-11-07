@@ -7,10 +7,9 @@ import SwiftUI
 
 /// A compact card showing a filter's logo above its name, used in the
 /// "Ver todas" grid. It fills the width of its grid column.
-/// `isSelected` swaps the `.primaryContainer` background for `.fatumAccent`.
+/// Every card looks the same; the selection is only shown on the Home chips.
 struct CategoryCardView: View {
     let filter: CatalogProvider.ServiceFilter
-    var isSelected: Bool = false
 
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -36,9 +35,8 @@ struct CategoryCardView: View {
                 .lineLimit(2, reservesSpace: true)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, layout.smallPadding + layout.spacingSmall)
-        .padding(.horizontal, layout.smallPadding)
-        .background(isSelected ? Color.fatumAccent : .primaryContainer)
+        .padding(layout.tinyPadding * 2)
+        .background(.primaryContainer)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
@@ -49,6 +47,8 @@ struct CategoryLogoView: View {
     let logoUrl: String?
     let placeholderIcon: String
     let size: CGFloat
+    /// Color of the fallback SF Symbol. Remote logos keep their own colors.
+    var tint: Color = .brandPrimary
 
     var body: some View {
         if let logoUrl, let url = URL(string: logoUrl) {
@@ -74,13 +74,13 @@ struct CategoryLogoView: View {
             .scaledToFit()
             .frame(width: size * 0.6, height: size * 0.6)
             .frame(width: size, height: size)
-            .foregroundStyle(.brandPrimary)
+            .foregroundStyle(tint)
     }
 }
 
 #Preview {
     HStack {
-        CategoryCardView(filter: .all, isSelected: true)
+        CategoryCardView(filter: .all)
         CategoryCardView(
             filter: .category(FatumCategory(
                 name: "Manicure y pedicure",

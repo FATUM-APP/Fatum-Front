@@ -14,6 +14,7 @@ struct ResponsiveLayout {
     var padding: CGFloat { isCompact ? 25 : 40 }
     var internalPadding: CGFloat { isCompact ? 15 : 30 }
     var smallPadding: CGFloat { isCompact ? 7 : 12 }
+    var tinyPadding: CGFloat { isCompact ? 5 : 10 }
     
     //Spacing
     var tiny: CGFloat { 3 }

@@ -17,24 +17,44 @@ extension FatumFieldStyle {
     )
 }
 
-/// A search box with the same size and look as `FatumTextField`, but it grows
-/// vertically as the text wraps, like a chat composer. After `maxLines` it stops
-/// growing and the text scrolls inside it.
+/// A Liquid Glass search box that grows vertically as the text wraps, like a chat
+/// composer. After `maxLines` it stops growing and the text scrolls inside it.
+///
+/// Next to it there is a microphone button that calls `onMicTapped`, used to open
+/// the voice search screen (`VoiceSearchScreen`).
 struct ExpandingSearchField: View {
     let placeholder: String
     @Binding var text: String
     var style: FatumFieldStyle = .standard
     var maxLines: Int = 5
+    var onMicTapped: () -> Void = {}
 
     @FocusState private var isFocused: Bool
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Namespace private var glassNamespace
 
     private var layout: ResponsiveLayout {
         ResponsiveLayout(isCompact: sizeClass == .compact)
     }
 
+    private var fieldShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: FatumFieldStyle.cornerRadius)
+    }
+
     var body: some View {
-        // `.top` keeps the icons on the first line once the text wraps.
+        // The container lets the field and the mic button blend as Liquid Glass.
+        GlassEffectContainer(spacing: layout.internalSpacing) {
+            HStack(alignment: .bottom, spacing: layout.internalSpacing) {
+                field
+                micButton
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: text.isEmpty)
+    }
+
+    // MARK: - Field
+
+    private var field: some View {
         HStack(alignment: .top, spacing: layout.internalSpacing) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(style.iconColor)
@@ -59,13 +79,34 @@ struct ExpandingSearchField: View {
         .fatumStyle(.body)
         .foregroundStyle(style.textColor)
         .padding(layout.internalPadding)
-        .background(style.fillColor)
-        .clipShape(RoundedRectangle(cornerRadius: FatumFieldStyle.cornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: FatumFieldStyle.cornerRadius)
-                .stroke(isFocused ? style.focusedBorderColor : style.borderColor, lineWidth: isFocused ? 2 : 1)
-        )
-        .animation(.easeInOut(duration: 0.15), value: text.isEmpty)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular.interactive(), in: fieldShape)
+        .glassEffectID("field", in: glassNamespace)
+        .overlay {
+            fieldShape
+                .stroke(style.focusedBorderColor, lineWidth: 1.5)
+                .opacity(isFocused ? 1 : 0)
+        }
+        .animation(.easeInOut(duration: 0.15), value: isFocused)
+    }
+
+    // MARK: - Microphone
+
+    private var micButton: some View {
+        Button {
+            isFocused = false
+            onMicTapped()
+        } label: {
+            Image(systemName: "mic")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(style.iconColor)
+                .frame(width: 20, height: 20)
+                .padding(layout.internalPadding)
+                .glassEffect(.regular.interactive(), in: .circle)
+                .glassEffectID("mic", in: glassNamespace)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Buscar con tu voz")
     }
 }
 
@@ -80,5 +121,5 @@ struct ExpandingSearchField: View {
         )
     }
     .padding(20)
-    .background(.primaryContainer)
+    .background(.secondaryContainer)
 }
