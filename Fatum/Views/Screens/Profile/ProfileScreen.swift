@@ -13,6 +13,8 @@ struct ProfileScreen: View {
     @Environment(UserProvider.self) private var userProvider
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showToast = false
+    @State private var toastMessage = "Función en construcción"
+    @State private var isUpgrading = false
     @State private var router = Router<ProfileRoute>()
 
     private var layout: ResponsiveLayout {
@@ -33,17 +35,17 @@ struct ProfileScreen: View {
                     .frame(height: layout.externalSpacing)
 
                 if !isProfessional {
-                    // The become-professional flow is being rebuilt; placeholder for now.
                     ProfileOptionView(icon: "dollarsign.circle", name: "Conviértete en profesional") {
-                        showToast = true
+                        becomeProfessional()
                     }
+                    .disabled(isUpgrading)
 
                     Spacer()
                 }
 
                 if isProfessional {
                     ProfileOptionView(icon: "heart.fill", name: "Servicios favoritos") {
-                        showToast = true
+                        showUnderConstruction()
                     }
 
                     Spacer()
@@ -56,7 +58,7 @@ struct ProfileScreen: View {
                 Spacer()
 
                 ProfileOptionView(icon: "hand.raised.fill", name: "Servicios recibidos") {
-                    showToast = true
+                    showUnderConstruction()
                 }
 
                 Spacer()
@@ -68,7 +70,7 @@ struct ProfileScreen: View {
                 Spacer()
 
                 ProfileOptionView(icon: "creditcard", name: "Métodos de pago") {
-                    showToast = true
+                    showUnderConstruction()
                 }
 
                 Spacer()
@@ -82,7 +84,7 @@ struct ProfileScreen: View {
                 Spacer()
 
                 if showToast {
-                    ToastMessageView(message: "Función en construcción")
+                    ToastMessageView(message: toastMessage)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .onAppear {
                             Task {
@@ -100,6 +102,26 @@ struct ProfileScreen: View {
             .profileDestinations()
         }
         .environment(router)
+    }
+
+    private func showUnderConstruction() {
+        toastMessage = "Función en construcción"
+        showToast = true
+    }
+
+    /// Upgrades the user; on success `currentUser` is reloaded and the view
+    /// switches to the professional options on its own.
+    private func becomeProfessional() {
+        guard !isUpgrading else { return }
+        isUpgrading = true
+        Task {
+            let success = await userProvider.becomeProfessional()
+            isUpgrading = false
+            toastMessage = success
+                ? "Ahora eres profesional"
+                : userProvider.error ?? "No se pudo completar la solicitud"
+            showToast = true
+        }
     }
 }
 

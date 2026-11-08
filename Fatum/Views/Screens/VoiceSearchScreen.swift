@@ -96,7 +96,7 @@ struct VoiceSearchScreen: View {
 
             Text("Dímelo con tus palabras, yo te escucho.")
                 .fatumStyle(.body)
-                .foregroundStyle(.text.opacity(0.7))
+                .foregroundStyle(.text)
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
@@ -119,7 +119,7 @@ struct VoiceSearchScreen: View {
             }
         }
         .screenPadding(.horizontal)
-        .padding(.bottom, layout.internalSpacing)
+        .screenPadding(.bottom)
     }
 
     /// The live transcript while talking, otherwise a short hint about what's happening.
@@ -188,18 +188,21 @@ struct VoiceSearchScreen: View {
 
     /// Soft gradient rising from the bottom edge. Brighter and taller while the user talks.
     private var voiceGlow: some View {
-        LinearGradient(
-            stops: [
-                .init(color: .clear, location: 0),
-                .init(color: .thirdGradient.opacity(0.45), location: 0.45),
-                .init(color: .brandPrimary.opacity(0.6), location: 1)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(height: 320 + voiceLevel * 120)
-        .opacity(recorder.isRecording ? 1 : 0.4)
+        VStack {
+            Spacer()
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .thirdGradient.opacity(0.45), location: 0.45),
+                    .init(color: .brandPrimary.opacity(0.6), location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 320 + voiceLevel * 120)
+        }
         .ignoresSafeArea()
+        .opacity(recorder.isRecording ? 1 : 0.4)
         .allowsHitTesting(false)
         .animation(.easeOut(duration: 0.15), value: voiceLevel)
         .accessibilityHidden(true)

@@ -33,7 +33,7 @@ struct HomeView: View {
     }
 
     private var name: String {
-        userProvider.currentUser?.name ?? "Usuario"
+        userProvider.currentUser?.name.capitalized ?? "Usuario"
     }
 
     /// Only categories the backend marks as enabled are shown.
@@ -133,16 +133,16 @@ struct HomeView: View {
 
     // MARK: - Greeting
 
-    /// Greeting and search box inside a `.primaryContainer` card.
+    /// Greeting and search box inside a clean, transparent glass card.
     private var greetingCard: some View {
         VStack(alignment: .leading, spacing: layout.internalSpacing) {
             Text("Hola \(name),")
-                .fatumStyle(.body)
-                .foregroundStyle(.brandPrimary)
+                .fatumStyle(.premiumHeader)
+                .foregroundStyle(.text)
 
             Text("¿Qué servicio estas buscando el día de hoy?")
-                .fatumStyle(.header)
-                .foregroundStyle(.brandPrimary)
+                .fatumStyle(.subheader)
+                .foregroundStyle(.text)
 
             ExpandingSearchField(
                 placeholder: "Ej. Corte de cabello, manicure…",
@@ -153,12 +153,12 @@ struct HomeView: View {
             .padding(.top, layout.spacingSmall)
             .fullScreenCover(isPresented: $showVoiceSearch) {
                 VoiceSearchScreen(onAudioRecorded: handleVoiceSearch)
+                    .presentationBackground(Color.brandSecondary)
             }
         }
         .padding(layout.internalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.primaryContainer)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
     }
 
     // MARK: - Categories

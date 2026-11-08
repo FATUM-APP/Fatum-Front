@@ -7,9 +7,10 @@ import SwiftUI
 
 /// Address picker at the top-left of Home.
 ///
-/// Folded, it shows the selected address's alias and "City, Country". Tapping it
-/// unfolds a panel below with the saved addresses (tap one to select it), an
-/// option to make the selected one principal, and links to add or manage addresses.
+/// Folded, it shows a minimalist header with the selected address's alias,
+/// a location pin, "City, Country", and a subtle chevron. Tapping it unfolds a
+/// panel below with saved addresses (tap one to select it), an option to make
+/// the selected one principal, and links to add or manage addresses.
 /// Selecting an address only changes `selected`; it does not touch the principal.
 struct HomeAddressSelector: View {
     let addresses: [FatumAddress]
@@ -26,8 +27,6 @@ struct HomeAddressSelector: View {
 
     @State private var isExpanded = false
     @Environment(\.horizontalSizeClass) private var sizeClass
-
-    private let badgeSize: CGFloat = 44
 
     private var layout: ResponsiveLayout {
         ResponsiveLayout(isCompact: sizeClass == .compact)
@@ -68,30 +67,27 @@ struct HomeAddressSelector: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: layout.internalSpacing) {
-            Image(systemName: "mappin.and.ellipse")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.brandPrimary)
-                .frame(width: badgeSize, height: badgeSize)
-                .background(.primaryContainer, in: Circle())
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .fatumStyle(.body)
+                .fontWeight(.bold)
+                .foregroundStyle(.text)
+                .lineLimit(1)
 
-            VStack(alignment: .leading, spacing: layout.tiny) {
-                Text(title)
-                    .fatumStyle(.body)
-                    .fontWeight(.bold)
+            HStack(spacing: 4) {
+                Image(systemName: "mappin")
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.text)
+
+                Text(subtitle)
+                    .fatumStyle(.footer)
+                    .foregroundStyle(.text.opacity(0.75))
                     .lineLimit(1)
 
-                HStack(spacing: layout.spacingSmall) {
-                    Text(subtitle)
-                        .fatumStyle(.footer)
-                        .lineLimit(1)
-
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                }
-                .foregroundStyle(.text.opacity(0.7))
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.text.opacity(0.6))
+                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
             }
         }
         .contentShape(Rectangle())
@@ -148,28 +144,31 @@ struct HomeAddressSelector: View {
     }
 
     private func addressRow(_ address: FatumAddress) -> some View {
-        HStack(spacing: layout.internalSpacing) {
+        let isPrincipal = (address == principal)
+
+        return HStack(spacing: layout.internalSpacing) {
             VStack(alignment: .leading, spacing: layout.tiny) {
                 HStack(spacing: layout.spacingSmall) {
                     Text(address.displayName)
                         .fatumStyle(.body)
                         .fontWeight(.bold)
+                        .foregroundStyle(Color.text)
                         .lineLimit(1)
 
-                    if address == principal {
+                    if isPrincipal {
                         Text("Principal")
                             .fatumStyle(.footer)
-                            .foregroundStyle(.brandPrimary)
+                            .foregroundStyle(Color.brandPrimary)
                             .padding(.horizontal, layout.smallPadding)
                             .padding(.vertical, layout.tiny)
-                            .background(.primaryContainer, in: Capsule())
+                            .background(Color.secondaryContainer, in: Capsule())
                     }
                 }
 
                 if !address.cityAndCountry.isEmpty {
                     Text(address.cityAndCountry)
                         .fatumStyle(.footer)
-                        .foregroundStyle(.text.opacity(0.7))
+                        .foregroundStyle(Color.text.opacity(0.7))
                         .lineLimit(1)
                 }
             }
@@ -178,16 +177,16 @@ struct HomeAddressSelector: View {
             if address == selected {
                 Image(systemName: "checkmark")
                     .fontWeight(.semibold)
-                    .foregroundStyle(.brandPrimary)
+                    .foregroundStyle(Color.text)
             }
         }
-        .foregroundStyle(.text)
         .padding(layout.internalPadding)
+        .background(isPrincipal ? Color.secondaryContainer.opacity(0.35) : Color.clear)
         .contentShape(Rectangle())
         .accessibilityAddTraits(address == selected ? .isSelected : [])
     }
 
-    /// A tappable row with an icon and a title. Folds the panel before running `action`.
+    /// A tappable row with an icon and a title. Folds the panel before running `action``.
     private func actionRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
         Button {
             collapse()
@@ -196,11 +195,12 @@ struct HomeAddressSelector: View {
             HStack(spacing: layout.internalSpacing) {
                 Image(systemName: icon)
                     .frame(width: 20)
+                    .foregroundStyle(.text)
                 Text(title)
                     .fatumStyle(.body)
+                    .foregroundStyle(.text)
                 Spacer()
             }
-            .foregroundStyle(.text)
             .padding(layout.internalPadding)
             .contentShape(Rectangle())
         }
@@ -232,16 +232,28 @@ struct HomeAddressSelector: View {
         country: "Colombia"
     )
 
-    HomeAddressSelector(
-        addresses: [principal, selected!],
-        principal: principal,
-        selected: $selected,
-        onMakePrincipal: { _ in },
-        onAdd: {},
-        onManage: {},
-        onRetry: {}
-    )
+    VStack {
+        HomeAddressSelector(
+            addresses: [
+                principal,
+                selected!,
+                FatumAddress(
+                    residence: "Av. Poblado #10-20",
+                    alias: "Gimnasio",
+                    city: "Medellín",
+                    state: "Antioquia",
+                    country: "Colombia"
+                )
+            ],
+            principal: principal,
+            selected: $selected,
+            onMakePrincipal: { _ in },
+            onAdd: {},
+            onManage: {},
+            onRetry: {}
+        )
+        Spacer()
+    }
     .padding(20)
-    .frame(maxHeight: .infinity, alignment: .top)
     .background(.brandSecondary)
 }

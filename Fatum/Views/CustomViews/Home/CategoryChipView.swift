@@ -7,8 +7,8 @@ import SwiftUI
 
 /// A chip with a filter's logo on the left and its name on the right, used in
 /// the horizontal categories row on Home. Styled like `FatumButton`'s `.bordered`:
-/// transparent with a `.text` border and text, or filled `.brandPrimary` with
-/// `.brandSecondary` text when `isSelected`.
+/// transparent with a `.text` border and text, or filled `.secondaryContainer`
+/// with `.brandPrimary` text and icon when `isSelected`.
 struct CategoryChipView: View {
     let filter: CatalogProvider.ServiceFilter
     var isSelected: Bool = false
@@ -23,7 +23,7 @@ struct CategoryChipView: View {
     }
 
     private var contentColor: Color {
-        isSelected ? .brandSecondary : .text
+        isSelected ? .brandPrimary : .text
     }
 
     var body: some View {
@@ -45,12 +45,12 @@ struct CategoryChipView: View {
         .padding(.vertical, layout.smallPadding)
         .background(
             RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(isSelected ? Color.brandPrimary : .clear)
+                .fill(isSelected ? Color.secondaryContainer : .clear)
         )
         // The border stays when selected (same color as the fill) so the chip doesn't change size.
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius)
-                .stroke(isSelected ? Color.brandPrimary : .text, lineWidth: 2)
+                .stroke(isSelected ? Color.secondaryContainer : .text, lineWidth: 2)
         )
         // Makes the transparent inside tappable, not only the logo and text.
         .contentShape(RoundedRectangle(cornerRadius: cornerRadius))

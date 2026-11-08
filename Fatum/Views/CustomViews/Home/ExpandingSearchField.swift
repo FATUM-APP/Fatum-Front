@@ -6,10 +6,10 @@
 import SwiftUI
 
 extension FatumFieldStyle {
-    /// For fields placed on a `.primaryContainer` card: a white box so it stands out from the card.
+    /// For fields placed on a card: a clean container with subtle border.
     static let onContainer = FatumFieldStyle(
         borderColor: .border,
-        focusedBorderColor: .brandPrimary,
+        focusedBorderColor: .border,
         errorBorderColor: .errorBorderLogin,
         fillColor: .brandSecondary,
         textColor: .text,
@@ -84,10 +84,8 @@ struct ExpandingSearchField: View {
         .glassEffectID("field", in: glassNamespace)
         .overlay {
             fieldShape
-                .stroke(style.focusedBorderColor, lineWidth: 1.5)
-                .opacity(isFocused ? 1 : 0)
+                .stroke(Color.border, lineWidth: 1)
         }
-        .animation(.easeInOut(duration: 0.15), value: isFocused)
     }
 
     // MARK: - Microphone
@@ -104,6 +102,10 @@ struct ExpandingSearchField: View {
                 .padding(layout.internalPadding)
                 .glassEffect(.regular.interactive(), in: .circle)
                 .glassEffectID("mic", in: glassNamespace)
+                .overlay {
+                    Circle()
+                        .stroke(Color.border, lineWidth: 1)
+                }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Buscar con tu voz")

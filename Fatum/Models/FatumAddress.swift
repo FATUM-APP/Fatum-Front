@@ -9,6 +9,24 @@ struct FatumAddress: Codable, Equatable, Hashable {
     var country: String?
     var userName: String?
 
+    // MARK: - Capitalized Accessors
+
+    var capitalizedAlias: String? {
+        alias?.capitalized
+    }
+
+    var capitalizedCity: String? {
+        city?.capitalized
+    }
+
+    var capitalizedState: String? {
+        state?.capitalized
+    }
+
+    var capitalizedCountry: String? {
+        country?.capitalized
+    }
+
     // MARK: - Display helpers
 
     /// The value the backend uses to identify this address in the principal and
@@ -26,18 +44,18 @@ struct FatumAddress: Codable, Equatable, Hashable {
         return alias.caseInsensitiveCompare(residence ?? "") != .orderedSame
     }
 
-    /// The alias when it is a real label, otherwise the residence line.
+    /// The alias when it is a real label, otherwise the residence line, capitalized per word.
     var displayName: String {
-        if hasAlias, let alias { return alias }
-        return residence ?? "Dirección"
+        if hasAlias, let alias { return alias.capitalized }
+        return (residence ?? "Dirección").capitalized
     }
 
-    /// "City, State" built from whichever parts are present.
+    /// "City, State" built from whichever parts are present, capitalized per word.
     var locationLine: String {
         Self.joined([city, state])
     }
 
-    /// "City, Country" built from whichever parts are present.
+    /// "City, Country" built from whichever parts are present, capitalized per word.
     var cityAndCountry: String {
         Self.joined([city, country])
     }
@@ -46,6 +64,7 @@ struct FatumAddress: Codable, Equatable, Hashable {
         parts
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+            .map { $0.capitalized }
             .joined(separator: ", ")
     }
 

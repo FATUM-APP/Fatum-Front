@@ -1,0 +1,10 @@
+# Build & Derived Data
+build/
+*.xcuserdatad
+DerivedData/
+.build/
+
+# CocoaPods / Flutter
+ios/Pods/
+ios/.symlinks/
+.dart_tool/

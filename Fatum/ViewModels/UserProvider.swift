@@ -216,6 +216,60 @@ class UserProvider {
         }
     }
 
+    // MARK: - Become Professional
+
+    /// Request body matching the backend's `InitializeProviderAvailability` DTO.
+    private struct InitializeAvailabilityRequest: Encodable {
+        let providerId: String
+    }
+
+    /// Upgrades the user to `PROFESSIONAL`, initializes their availability and
+    /// reloads `/users/me` so the UI reflects the new role.
+    func becomeProfessional() async -> Bool {
+        error = nil
+        guard let userId = currentUser?.userId else { return false }
+        do {
+            let idToken = try await fetchIdToken()
+
+            // 1. PUT /users/upgrade (204 No Content on success)
+            var upgradeRequest = URLRequest(url: URL(string: "\(userBaseURL)/users/upgrade")!)
+            upgradeRequest.httpMethod = "PUT"
+            upgradeRequest.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+
+            let (upgradeData, upgradeResponse) = try await URLSession.shared.data(for: upgradeRequest)
+            let upgradeStatus = (upgradeResponse as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200...299).contains(upgradeStatus) else {
+                Self.logErrorResponse("PUT", "/users/upgrade", statusCode: upgradeStatus, data: upgradeData)
+                self.error = Self.parseErrorMessage(from: upgradeData) ?? "Error del servidor (\(upgradeStatus))"
+                return false
+            }
+
+            // 2. POST /provider/availability/initialize (201 Created on success)
+            var availabilityRequest = URLRequest(url: URL(string: "\(userBaseURL)/provider/availability/initialize")!)
+            availabilityRequest.httpMethod = "POST"
+            availabilityRequest.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+            availabilityRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            availabilityRequest.httpBody = try JSONEncoder().encode(InitializeAvailabilityRequest(providerId: userId))
+
+            let (availabilityData, availabilityResponse) = try await URLSession.shared.data(for: availabilityRequest)
+            let availabilityStatus = (availabilityResponse as? HTTPURLResponse)?.statusCode ?? 0
+
+            // The role already changed on the backend, so reload regardless of the availability result.
+            await loadCurrentUser()
+
+            guard (200...299).contains(availabilityStatus) else {
+                Self.logErrorResponse("POST", "/provider/availability/initialize", statusCode: availabilityStatus, data: availabilityData)
+                self.error = Self.parseErrorMessage(from: availabilityData) ?? "Error del servidor (\(availabilityStatus))"
+                return false
+            }
+            return true
+        } catch {
+            print("DEBUG becomeProfessional error: \(error)")
+            self.error = error.localizedDescription
+            return false
+        }
+    }
+
     // MARK: - Profile Image
 
     /// Checks whether the user has a profile image.
