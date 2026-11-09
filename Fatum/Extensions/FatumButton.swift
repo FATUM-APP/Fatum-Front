@@ -95,6 +95,15 @@ extension FatumButton{
                     .foregroundStyle(foregroundColor ?? .brandPrimary)
                     .padding(layout.internalPadding)
                     .cornerRadius(20)
+            case .compact:
+                label
+                    .fatumStyle(.body)
+                    .fontWeight(.bold)
+                    .foregroundStyle(foregroundColor ?? .brandPrimary)
+                    .padding(.vertical,layout.smallPadding)
+                    .padding(.horizontal,layout.internalPadding)
+                    .background(.secondaryContainer)
+                    .cornerRadius(20)
             }
         }
     }
@@ -118,6 +127,9 @@ extension ButtonStyle where Self == FatumButton.ButtonStyle{
                 
             }
             .buttonStyle(.fatumButton(variant: .secondary))
+
+            Button("Contratar") {}
+                .buttonStyle(.fatumButton(variant: .compact))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(20)

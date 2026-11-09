@@ -26,13 +26,13 @@ struct FixedQuestionCardView: View {
                     .foregroundStyle(.text)
 
                 Text("Tipo: \(question.type.displayName)")
-                    .fatumStyle(.footer)
-                    .foregroundStyle(.text.opacity(0.7))
+                    .fatumStyle(.caption)
+                    .foregroundStyle(.text)
 
                 if !question.options.isEmpty {
                     Text("Opciones: \(question.options.joined(separator: ", "))")
                         .fatumStyle(.footer)
-                        .foregroundStyle(.text.opacity(0.7))
+                        .foregroundStyle(.text)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -41,12 +41,11 @@ struct FixedQuestionCardView: View {
                 onDelete()
             } label: {
                 Image(systemName: "trash")
-                    .foregroundStyle(.errorBorderLogin)
+                    .foregroundStyle(.text)
             }
             .buttonStyle(.plain)
         }
         .padding(layout.internalPadding)
-        .background(.brandSecondary)
         .clipShape(RoundedRectangle(cornerRadius: FatumFieldStyle.cornerRadius))
         .overlay(
             RoundedRectangle(cornerRadius: FatumFieldStyle.cornerRadius)

@@ -1,5 +1,5 @@
 //
-//  ProviderScreen.swift
+//  MyServicesScreen.swift
 //  Fatum
 //
 
@@ -9,8 +9,9 @@ import SwiftUI
 /// and shares it with every screen pushed in this tab.
 ///
 /// "Contratar" opens Home, "Mis Favoritos" is not available yet, and
-/// "+ Ofrecer Servicio" starts `CreateServiceScreen`.
-struct ProviderScreen: View {
+/// "+ Ofrecer Servicio" starts `CreateServiceScreen`. The content scrolls
+/// vertically so more sections can be added below.
+struct MyServicesScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var router = Router<ProviderRoute>()
     @State private var showToast = false
@@ -22,26 +23,34 @@ struct ProviderScreen: View {
 
     var body: some View {
         NavigationStack(path: $router.path) {
-            VStack(alignment: .leading, spacing: layout.externalSpacing) {
-                HStack(spacing: layout.internalSpacing) {
-                    ProviderChipView(title: "Contratar", icon: "bag") {
-                        router.push(.home)
+            ScrollView {
+                VStack(alignment: .leading, spacing: layout.externalSpacing) {
+                    HStack(spacing: layout.smallPadding) {
+                        Button {
+                            router.push(.home)
+                        } label: {
+                            Label("Contratar", systemImage: "bag")
+                        }
+                        .buttonStyle(.fatumButton(variant: .bordered))
+
+                        Spacer()
+
+                        Button {
+                            showMessage("Función en construcción")
+                        } label: {
+                            Label("Mis Favoritos", systemImage: "heart")
+                        }
+                        .buttonStyle(.fatumButton(variant: .bordered))
                     }
+                    .padding(.horizontal, layout.internalPadding)
 
-                    ProviderChipView(title: "Mis Favoritos", icon: "heart") {
-                        showMessage("Función en construcción")
+                    Button("+ Ofrecer Servicio") {
+                        router.push(.createService)
                     }
+                    .buttonStyle(.fatumButton(variant: .third))
                 }
-
-                Button("+ Ofrecer Servicio") {
-                    router.push(.createService)
-                }
-                .buttonStyle(.fatumButton(variant: .third))
-
-                Spacer()
+                .screenPadding()
             }
-            .screenPadding()
-            .frame(maxWidth: .infinity, alignment: .leading)
             .background(.brandSecondary)
             .overlay(alignment: .bottom) {
                 if showToast {
@@ -78,6 +87,6 @@ struct ProviderScreen: View {
 }
 
 #Preview {
-    ProviderScreen()
+    MyServicesScreen()
         .environment(UserProvider())
 }

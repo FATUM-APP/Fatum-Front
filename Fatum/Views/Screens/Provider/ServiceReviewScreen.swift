@@ -10,7 +10,8 @@ import SwiftUI
 /// lets the provider edit every section in a sheet, previews the hiring controls
 /// (date and time, fixed questions, negotiated price) and publishes with "Ofrecer servicio".
 ///
-/// Hiring itself is not available yet, so "Contratar" only shows a toast.
+/// "Contratar" is shown as clients will see it but does nothing here: the
+/// provider can't hire their own service.
 struct ServiceReviewScreen: View {
     @Binding var draft: ServiceDraft
     let rootName: String
@@ -40,15 +41,15 @@ struct ServiceReviewScreen: View {
     @State private var selectedDate = Date()
     @State private var proposedPrice: Decimal = 0
 
-    @State private var showToast = false
-    @State private var toastMessage: String = ""
-
     private let heroHeight: CGFloat = 340
     private let avatarSize: CGFloat = 44
     private let circleButtonSize: CGFloat = 38
     private let editButtonSize: CGFloat = 32
     private let dividerHeight: CGFloat = 42
     private let bottomBarRadius: CGFloat = 24
+    private let chipCornerRadius: CGFloat = 20
+    /// Same logo size as `CategoryChipView` on Home.
+    private let chipLogoSize: CGFloat = 28
     /// How much "−" and "+" change the proposed price.
     private let priceStep: Decimal = 1000
 
@@ -60,6 +61,16 @@ struct ServiceReviewScreen: View {
         draft.basePrice ?? 0
     }
 
+    /// What the client would pay: their proposal when the price is negotiable, otherwise the base price.
+    private var displayedPrice: Decimal {
+        draft.isNegotiable ? proposedPrice : basePrice
+    }
+
+    private static let hiringSectionID = "hiringSection"
+
+    /// Placeholder until the service has real reviews.
+    private let placeholderRating = 5
+
     private var providerName: String {
         userProvider.currentUser?.name.capitalized ?? "Profesional"
     }
@@ -67,56 +78,52 @@ struct ServiceReviewScreen: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    heroCarousel
+        ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        heroCarousel
 
-                    VStack(alignment: .leading, spacing: layout.externalSpacing) {
-                        titleSection
+                        VStack(alignment: .leading, spacing: layout.externalSpacing) {
+                            titleSection
 
-                        divider
+                            divider
 
-                        descriptionSection
+                            descriptionSection
 
-                        divider
+                            divider
 
-                        informationSection
+                            informationSection
 
-                        divider
+                            divider
 
-                        hiringSection
+                            hiringSection
+                                .id(Self.hiringSectionID)
 
-                        publishSection
+                            publishSection
+                        }
+                        .screenPadding()
                     }
-                    .screenPadding()
+                }
+                .scrollDismissesKeyboard(.interactively)
+
+                hiringBar {
+                    withAnimation {
+                        proxy.scrollTo(Self.hiringSectionID, anchor: .top)
+                    }
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
-
-            hiringBar
         }
         .background(.brandSecondary)
-        .overlay(alignment: .bottom) {
-            if showToast {
-                ToastMessageView(message: toastMessage)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .onAppear {
-                        Task {
-                            try? await Task.sleep(for: .seconds(3))
-                            withAnimation {
-                                showToast = false
-                            }
-                        }
-                    }
-            }
-        }
-        .animation(.easeInOut, value: showToast)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             proposedPrice = basePrice
         }
+        // The proposed price only differs from the base price while the service is negotiable.
         .onChange(of: draft.basePriceText) {
+            proposedPrice = basePrice
+        }
+        .onChange(of: draft.isNegotiable) {
             proposedPrice = basePrice
         }
         .onChange(of: draft.images.count) {
@@ -163,13 +170,14 @@ struct ServiceReviewScreen: View {
             Text("\(draft.images.isEmpty ? 0 : currentPhotoIndex + 1)/\(draft.images.count)")
                 .fatumStyle(.footer)
                 .fontWeight(.bold)
-                .foregroundStyle(.brandSecondary)
+                .foregroundStyle(.text)
                 .padding(.horizontal, layout.internalSpacing)
                 .padding(.vertical, layout.tinyPadding)
-                .background(Color.brandPrimary.opacity(0.75), in: Capsule())
+                .glassEffect(.regular, in: .capsule)
                 .padding(layout.internalPadding)
         }
-        // Back and "Editar fotos" float over the photo
+        // Back and "Editar fotos" float over the photo, in Liquid Glass like the
+        // navigation bar buttons of the other screens.
         .overlay(alignment: .top) {
             HStack {
                 Button {
@@ -177,10 +185,11 @@ struct ServiceReviewScreen: View {
                 } label: {
                     Image(systemName: "chevron.left")
                         .fontWeight(.bold)
-                        .foregroundStyle(.brandSecondary)
+                        .foregroundStyle(.text)
                         .frame(width: circleButtonSize, height: circleButtonSize)
-                        .background(Color.brandPrimary.opacity(0.75), in: Circle())
+                        .glassEffect(.regular.interactive(), in: .circle)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Volver")
 
                 Spacer()
@@ -191,15 +200,15 @@ struct ServiceReviewScreen: View {
                     Label("Editar fotos", systemImage: "photo.on.rectangle.angled")
                         .fatumStyle(.footer)
                         .fontWeight(.bold)
-                        .foregroundStyle(.brandSecondary)
+                        .foregroundStyle(.text)
                         .padding(.horizontal, layout.internalSpacing)
                         .padding(.vertical, layout.smallPadding)
-                        .background(Color.brandPrimary.opacity(0.75), in: Capsule())
+                        .glassEffect(.regular.interactive(), in: .capsule)
                 }
+                .buttonStyle(.plain)
             }
             .disabled(isSubmitting)
-            .screenPadding(.horizontal)
-            .padding(.top, layout.internalPadding)
+            .padding(layout.internalPadding)
         }
     }
 
@@ -226,19 +235,29 @@ struct ServiceReviewScreen: View {
                 .accessibilityLabel("Editar título")
             }
 
-            // Rating | provider | reviews. A new service has no rating or reviews yet.
+            if let category = draft.category {
+                categoryChip(category)
+            }
+
+            // Rating | provider | reviews
             HStack(spacing: 0) {
                 VStack(spacing: layout.tiny) {
-                    Text("Nuevo")
+                    Text("\(placeholderRating).0")
                         .fatumStyle(.subheader)
                         .fontWeight(.bold)
                         .foregroundStyle(.text)
 
-                    Text("Sin calificación")
-                        .fatumStyle(.footer)
-                        .foregroundStyle(.text.opacity(0.7))
+                    HStack(spacing: layout.tiny) {
+                        ForEach(0..<placeholderRating, id: \.self) { _ in
+                            Image(systemName: "star.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.text)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Calificación \(placeholderRating) de 5")
 
                 verticalDivider
 
@@ -263,11 +282,36 @@ struct ServiceReviewScreen: View {
 
                     Text("Reseñas")
                         .fatumStyle(.footer)
-                        .foregroundStyle(.text.opacity(0.7))
+                        .foregroundStyle(.text)
                 }
                 .frame(maxWidth: .infinity)
             }
         }
+    }
+
+    /// The service's category as a chip with its logo and slug, styled like an unselected `CategoryChipView`.
+    private func categoryChip(_ category: FatumCategory) -> some View {
+        HStack(spacing: layout.tiny) {
+            CategoryLogoView(
+                logoUrl: category.logoUrl,
+                placeholderIcon: "square.grid.2x2",
+                size: chipLogoSize,
+                tint: .text
+            )
+
+            Text(category.slug)
+                .fatumStyle(.footer)
+                .fontWeight(.bold)
+                .foregroundStyle(.text)
+        }
+        .padding(.horizontal, layout.smallPadding + 1)
+        .padding(.vertical, layout.smallPadding)
+        .overlay(
+            RoundedRectangle(cornerRadius: chipCornerRadius)
+                .stroke(Color.text, lineWidth: 2)
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Categoría \(category.name)")
     }
 
     private var providerAvatar: some View {
@@ -314,34 +358,59 @@ struct ServiceReviewScreen: View {
             }
 
             HStack(spacing: 0) {
-                infoCell("Categoría", value: draft.category?.name ?? rootName, alignment: .leading)
-                verticalDivider
-                infoCell("Tiempo estimado", value: draft.estimatedTimeDisplay, alignment: .trailing)
-            }
+                infoCell("Precio", alignment: .leading) {
+                    HStack(spacing: layout.tiny) {
+                        infoValue(Self.formatPrice(basePrice))
 
-            divider
+                        negotiableIcon
+                    }
+                }
 
-            HStack(spacing: 0) {
-                infoCell("Tipo de cobro", value: draft.priceType.displayName, alignment: .leading)
                 verticalDivider
-                infoCell("Negociable", value: draft.isNegotiable ? "Sí" : "No", alignment: .trailing)
+
+                infoCell("Tipo de cobro", alignment: .center) {
+                    infoValue(draft.priceType.displayName)
+                }
+
+                verticalDivider
+
+                infoCell("Tiempo estimado", alignment: .trailing) {
+                    infoValue(draft.estimatedTimeDisplay)
+                }
             }
         }
     }
 
-    private func infoCell(_ label: String, value: String, alignment: HorizontalAlignment) -> some View {
+    /// Two arrows when the client can propose another price, a lock when the price is fixed.
+    private var negotiableIcon: some View {
+        Image(systemName: draft.isNegotiable ? "arrow.left.arrow.right.circle.fill" : "lock.fill")
+            .font(.footnote)
+            .foregroundStyle(.text)
+            .accessibilityLabel(draft.isNegotiable ? "Precio negociable" : "Precio fijo")
+    }
+
+    private func infoCell<Value: View>(
+        _ label: String,
+        alignment: HorizontalAlignment,
+        @ViewBuilder value: () -> Value
+    ) -> some View {
         VStack(alignment: alignment, spacing: layout.tiny) {
             Text(label)
                 .fatumStyle(.footer)
-                .foregroundStyle(.text.opacity(0.7))
+                .foregroundStyle(.text)
 
-            Text(value)
-                .fatumStyle(.body)
-                .fontWeight(.bold)
-                .foregroundStyle(.fatumAccent)
+            value()
         }
-        .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+        .frame(maxWidth: .infinity, alignment: Alignment(horizontal: alignment, vertical: .center))
         .padding(.horizontal, layout.tinyPadding)
+    }
+
+    private func infoValue(_ value: String) -> some View {
+        Text(value)
+            .fatumStyle(.body)
+            .fontWeight(.bold)
+            .foregroundStyle(.text)
+            .multilineTextAlignment(.center)
     }
 
     // MARK: - Hiring Preview
@@ -355,7 +424,7 @@ struct ServiceReviewScreen: View {
 
                 Text("Vista previa de lo que el cliente completará al contratar tu servicio")
                     .fatumStyle(.footer)
-                    .foregroundStyle(.text.opacity(0.65))
+                    .foregroundStyle(.text)
             }
 
             // Date and time
@@ -383,7 +452,7 @@ struct ServiceReviewScreen: View {
 
                         Text("Precio sugerido por el profesional: \(Self.formatPrice(basePrice)) \(draft.priceType.unitLabel)")
                             .fatumStyle(.footer)
-                            .foregroundStyle(.text.opacity(0.7))
+                            .foregroundStyle(.text)
 
                         HStack(spacing: layout.internalSpacing) {
                             stepperButton(systemImage: "minus", delta: -priceStep)
@@ -409,11 +478,9 @@ struct ServiceReviewScreen: View {
                 if draft.fixedQuestions.isEmpty {
                     Text("No agregaste preguntas fijas para el cliente.")
                         .fatumStyle(.footer)
-                        .foregroundStyle(.text.opacity(0.65))
+                        .foregroundStyle(.text)
                 } else {
-                    ForEach(draft.fixedQuestions) { question in
-                        FixedQuestionAnswerView(question: question)
-                    }
+                    FixedQuestionsCarousel(questions: draft.fixedQuestions)
                 }
             }
         }
@@ -425,7 +492,7 @@ struct ServiceReviewScreen: View {
         VStack(alignment: .leading, spacing: layout.internalSpacing) {
             Text("¿Todo listo para publicar tu servicio?")
                 .fatumStyle(.footer)
-                .foregroundStyle(.text.opacity(0.75))
+                .foregroundStyle(.text)
 
             Button {
                 onPublish()
@@ -444,62 +511,50 @@ struct ServiceReviewScreen: View {
 
     // MARK: - Hiring Bar
 
-    /// Dark bottom bar as clients will see it: price (with a stepper when negotiable),
-    /// date, job type and "Contratar".
-    private var hiringBar: some View {
+    /// Dark bottom bar as clients will see it. The left side only summarises the
+    /// request (price, date, job type); tapping it scrolls to "Personaliza tu solicitud",
+    /// where those values are changed.
+    private func hiringBar(onOpenRequest: @escaping () -> Void) -> some View {
         HStack(spacing: layout.internalSpacing) {
-            VStack(alignment: .leading, spacing: layout.tiny) {
-                HStack(spacing: layout.internalSpacing) {
-                    if draft.isNegotiable {
-                        HStack(spacing: layout.internalSpacing) {
-                            barStepperButton(systemImage: "minus", delta: -priceStep)
-
-                            Text(Self.formatPrice(proposedPrice))
-                                .fatumStyle(.body)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.brandSecondary)
-
-                            barStepperButton(systemImage: "plus", delta: priceStep)
-                        }
-                        .padding(.horizontal, layout.internalSpacing)
-                        .padding(.vertical, layout.tinyPadding)
-                        .background(Color.fatumAccent.opacity(0.85), in: Capsule())
-                    } else {
-                        Text(Self.formatPrice(basePrice))
+            Button(action: onOpenRequest) {
+                VStack(alignment: .leading, spacing: layout.tiny) {
+                    HStack(alignment: .firstTextBaseline, spacing: layout.internalSpacing) {
+                        Text(Self.formatPrice(displayedPrice))
                             .fatumStyle(.subheader)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.brandSecondary)
+
+                        Text(draft.priceType.unitLabel)
+                            .fatumStyle(.footer)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.brandSecondary)
+
+                        Image(systemName: "chevron.up")
+                            .font(.caption)
                             .fontWeight(.bold)
                             .foregroundStyle(.brandSecondary)
                     }
 
-                    Text(draft.priceType.unitLabel)
+                    Text("\(selectedDate.formatted(Self.bookingDateStyle)) • \(JobType.PRESENCIAL.displayName)")
                         .fatumStyle(.footer)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.brandSecondary)
+                        .foregroundStyle(.brandSecondary.opacity(0.8))
+                        .lineLimit(1)
                 }
-
-                Text("\(selectedDate.formatted(Self.bookingDateStyle)) • \(JobType.PRESENCIAL.displayName)")
-                    .fatumStyle(.footer)
-                    .foregroundStyle(.brandSecondary.opacity(0.8))
-                    .lineLimit(1)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityHint("Muestra las opciones para personalizar tu solicitud")
 
             Spacer()
 
-            Button {
-                showMessage("Función en construcción")
-            } label: {
-                Text("Contratar")
-                    .fatumStyle(.body)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.brandPrimary)
-                    .padding(.horizontal, layout.internalPadding)
-                    .padding(.vertical, layout.smallPadding)
-                    .background(Color.secondaryContainer, in: Capsule())
-            }
-            .buttonStyle(.plain)
+            // Preview only: the provider can't hire their own service. `FatumButton`
+            // doesn't dim when disabled, so it keeps the look clients will see.
+            Button("Contratar") {}
+                .buttonStyle(.fatumButton(variant: .compact))
+                .disabled(true)
+                .accessibilityHint("Vista previa: los clientes usarán este botón para contratar")
         }
-        .screenPadding(.horizontal)
-        .padding(.vertical, layout.internalPadding)
+        .padding(layout.internalPadding)
         .background(
             UnevenRoundedRectangle(topLeadingRadius: bottomBarRadius, topTrailingRadius: bottomBarRadius)
                 .fill(Color.brandPrimary)
@@ -624,17 +679,6 @@ struct ServiceReviewScreen: View {
         .buttonStyle(.plain)
     }
 
-    private func barStepperButton(systemImage: String, delta: Decimal) -> some View {
-        Button {
-            adjustProposedPrice(by: delta)
-        } label: {
-            Image(systemName: systemImage)
-                .fontWeight(.bold)
-                .foregroundStyle(.brandSecondary)
-        }
-        .buttonStyle(.plain)
-    }
-
     private var divider: some View {
         Rectangle()
             .fill(Color.border)
@@ -647,15 +691,10 @@ struct ServiceReviewScreen: View {
             .frame(width: 1, height: dividerHeight)
     }
 
+    /// Only a negotiable price can change; a fixed one always stays at the base price.
     private func adjustProposedPrice(by delta: Decimal) {
+        guard draft.isNegotiable else { return }
         proposedPrice = max(0, proposedPrice + delta)
-    }
-
-    private func showMessage(_ message: String) {
-        toastMessage = message
-        withAnimation {
-            showToast = true
-        }
     }
 
     /// "28.000": Colombian grouping, no decimals.
@@ -676,7 +715,11 @@ struct ServiceReviewScreen: View {
         priceType: .HOURLY,
         isNegotiable: true,
         estimatedTimeText: "90",
-        fixedQuestions: [FixedQuestion(question: "¿Tienes alguna alergia?", type: .BOOLEAN)]
+        category: FatumCategory(name: "Peluquería", slug: "peluqueria", parentSlug: "belleza", schedulingModel: "APPOINTMENT", isAble: true),
+        fixedQuestions: [
+            FixedQuestion(question: "¿Tienes alguna alergia?", type: .BOOLEAN),
+            FixedQuestion(question: "Largo del cabello", type: .SINGLE_CHOICE, options: ["Corto", "Medio", "Largo"])
+        ]
     )
 
     ServiceReviewScreen(

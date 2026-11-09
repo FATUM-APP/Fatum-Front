@@ -226,7 +226,7 @@ struct AddressesScreen<Route: Hashable>: View {
 
             Text(message)
                 .fatumStyle(.body)
-                .foregroundStyle(.text.opacity(0.7))
+                .foregroundStyle(.text)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

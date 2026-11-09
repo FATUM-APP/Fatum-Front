@@ -137,7 +137,7 @@ struct VerificationFlowView: View {
 
             Text("Sube una foto de perfil para que los usuarios te reconozcan.")
                 .fatumStyle(.body)
-                .foregroundStyle(.text.opacity(0.7))
+                .foregroundStyle(.text)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
 
@@ -177,7 +177,7 @@ struct VerificationFlowView: View {
 
                 Text("Sube tu \(docType) con número \(docNumber) en formato PDF.\(needsBackSide ? " Asegúrate de incluir ambos lados del documento." : "")")
                     .fatumStyle(.body)
-                    .foregroundStyle(.text.opacity(0.7))
+                    .foregroundStyle(.text)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
 
@@ -327,7 +327,7 @@ struct VerificationFlowView: View {
 
             Text("Tu foto de perfil y documento han sido subidos exitosamente. Presiona el botón para confirmar tu autentificación.")
                 .fatumStyle(.body)
-                .foregroundStyle(.text.opacity(0.7))
+                .foregroundStyle(.text)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
         }

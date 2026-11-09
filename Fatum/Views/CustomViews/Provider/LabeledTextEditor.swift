@@ -48,7 +48,7 @@ struct LabeledTextEditor: View {
 
                 Text("\(text.count)/\(maxLength)")
                     .fatumStyle(.footer)
-                    .foregroundStyle(.text.opacity(0.6))
+                    .foregroundStyle(.text)
             }
 
             ZStack(alignment: .topLeading) {

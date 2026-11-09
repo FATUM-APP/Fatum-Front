@@ -24,9 +24,9 @@ struct ServicePricingFields: View {
                 text: $draft.basePriceText,
                 icon: "dollarsign.circle",
                 isOptional: true,
-                keyboardType: .decimalPad,
+                keyboardType: .numberPad,
                 submitLabel: .done,
-                allowedCharacters: Self.decimalCharacters
+                allowedCharacters: Self.groupedPesos
             )
 
             LabeledPicker(
@@ -44,13 +44,25 @@ struct ServicePricingFields: View {
         }
     }
 
-    /// Keeps digits and a single decimal separator; a comma is turned into a dot.
-    nonisolated private static func decimalCharacters(oldValue: String, newValue: String) -> String {
-        let filtered = newValue
-            .replacingOccurrences(of: ",", with: ".")
-            .filter { $0.isNumber || $0 == "." }
-        return filtered.filter { $0 == "." }.count > 1 ? oldValue : filtered
+    /// Formats the price while typing: keeps only digits and groups thousands
+    /// with dots, e.g. "50000" → "50.000". `ServiceDraft.basePrice` removes the
+    /// dots again. Pesos are whole numbers, so there is no decimal part.
+    nonisolated private static func groupedPesos(oldValue: String, newValue: String) -> String {
+        let digits = String(newValue.filter(\.isNumber).drop { $0 == "0" }.prefix(maxDigits))
+        guard !digits.isEmpty else { return newValue.contains("0") ? "0" : "" }
+
+        var grouped = ""
+        for (index, digit) in digits.enumerated() {
+            if index > 0 && (digits.count - index) % 3 == 0 {
+                grouped.append(".")
+            }
+            grouped.append(digit)
+        }
+        return grouped
     }
+
+    /// Up to 999.999.999.999 COP.
+    nonisolated private static let maxDigits = 12
 }
 
 #Preview {

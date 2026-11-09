@@ -16,7 +16,7 @@ enum ProviderRoute: Hashable {
 
 extension View {
     /// Registers every `ProviderRoute` destination. Apply once to the root of the
-    /// `NavigationStack` owned by `ProviderScreen`.
+    /// `NavigationStack` owned by `MyServicesScreen`.
     func providerDestinations() -> some View {
         navigationDestination(for: ProviderRoute.self) { route in
             switch route {

@@ -37,15 +37,15 @@ struct ServicePhotosPicker: View {
         VStack(alignment: .leading, spacing: layout.spacingMedium) {
             HStack {
                 Text("FOTOS SELECCIONADAS")
-                    .fatumStyle(.footer)
+                    .fatumStyle(.caption)
                     .fontWeight(.bold)
                     .foregroundStyle(.text)
 
                 Spacer()
 
                 Text("\(images.count)/\(ServiceDraft.maxPhotos) (mín. \(ServiceDraft.minPhotos))")
-                    .fatumStyle(.footer)
-                    .foregroundStyle(.text.opacity(0.7))
+                    .fatumStyle(.caption)
+                    .foregroundStyle(.text)
             }
 
             if remainingSlots > 0 {
@@ -113,7 +113,7 @@ struct ServicePhotosPicker: View {
 
                     Text("Selecciona al menos \(ServiceDraft.minPhotos) foto (máximo \(ServiceDraft.maxPhotos))")
                         .fatumStyle(.footer)
-                        .foregroundStyle(.brandPrimary.opacity(0.7))
+                        .foregroundStyle(.brandPrimary)
                 }
             )
             .overlay(

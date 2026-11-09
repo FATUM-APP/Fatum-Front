@@ -32,7 +32,7 @@ struct FatumFieldStyle {
 
     static let standard = FatumFieldStyle(
         borderColor: .border,
-        focusedBorderColor: .text,
+        focusedBorderColor: .border,
         errorBorderColor: .errorBorderLogin,
         fillColor: .clear,
         textColor: .text,

@@ -28,7 +28,7 @@ struct UpdateUserField: View {
 
                 Text(fieldValue)
                     .fatumStyle(.body)
-                    .foregroundStyle(.text.opacity(0.7))
+                    .foregroundStyle(.text)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 

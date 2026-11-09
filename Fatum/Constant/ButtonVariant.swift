@@ -14,4 +14,6 @@ enum ButtonVariant{
     case bordered
     case borderedExpanded
     case outlined
+    /// Filled `.secondaryContainer` with `.brandPrimary` text, only as wide as its label like `.bordered`.
+    case compact
 }

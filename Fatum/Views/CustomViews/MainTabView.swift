@@ -30,7 +30,7 @@ struct MainTabView: View {
 
             Tab(value: 1) {
                 if isProfessional {
-                    ProviderScreen()
+                    MyServicesScreen()
                 } else {
                     BuildingView(name: "Favoritos")
                 }

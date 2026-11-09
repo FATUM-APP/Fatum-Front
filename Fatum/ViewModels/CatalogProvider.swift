@@ -51,6 +51,9 @@ class CatalogProvider {
     let root: String
 
     private let catalogBaseURL = "https://btx2xtbb3a.execute-api.us-east-1.amazonaws.com/catalog"
+    /// ALB endpoint (plain HTTP, port 80) tried for item creation; allowed by the ATS
+    /// exception in Info.plist. Not in use right now: `createItem` goes through API Gateway.
+    private let catalogUploadBaseURL = "http://fatum-alb-377854245.us-east-1.elb.amazonaws.com/catalog"
 
     init(root: String) {
         self.root = root
@@ -143,6 +146,12 @@ class CatalogProvider {
             multipart.append("--\(boundary)--\(crlf)".data(using: .utf8)!)
             request.httpBody = multipart
 
+            // Sizes of what is being uploaded, to diagnose HTTP 413 (Request Entity Too Large).
+            for (index, imageData) in images.enumerated() {
+                print("DEBUG POST /catalog/item/create image_\(index + 1).jpg: \(Self.megabytes(imageData.count))")
+            }
+            print("DEBUG POST /catalog/item/create total body: \(Self.megabytes(multipart.count))")
+
             let (data, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
@@ -216,6 +225,11 @@ class CatalogProvider {
         request.httpMethod = "GET"
         request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
         return request
+    }
+
+    /// "2.37 MB" for a byte count.
+    private static func megabytes(_ bytes: Int) -> String {
+        String(format: "%.2f MB", Double(bytes) / 1_048_576)
     }
 
     /// Prints the raw body of a failed response so the backend's exact error shows in the console.

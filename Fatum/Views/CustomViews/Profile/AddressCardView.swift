@@ -56,7 +56,7 @@ struct AddressCardView: View {
                 if !address.locationLine.isEmpty {
                     Text(address.locationLine)
                         .fatumStyle(.footer)
-                        .foregroundStyle(.text.opacity(0.7))
+                        .foregroundStyle(.text)
                         .lineLimit(1)
                 }
             }

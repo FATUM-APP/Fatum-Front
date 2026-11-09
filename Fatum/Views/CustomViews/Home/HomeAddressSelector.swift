@@ -81,12 +81,12 @@ struct HomeAddressSelector: View {
 
                 Text(subtitle)
                     .fatumStyle(.footer)
-                    .foregroundStyle(.text.opacity(0.75))
+                    .foregroundStyle(.text)
                     .lineLimit(1)
 
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.text.opacity(0.6))
+                    .foregroundStyle(.text)
                     .rotationEffect(.degrees(isExpanded ? 180 : 0))
             }
         }
@@ -100,7 +100,7 @@ struct HomeAddressSelector: View {
             if let errorMessage, addresses.isEmpty {
                 Text(errorMessage)
                     .fatumStyle(.footer)
-                    .foregroundStyle(.text.opacity(0.7))
+                    .foregroundStyle(.text)
                     .padding(layout.internalPadding)
                 divider
                 actionRow(icon: "arrow.clockwise", title: "Reintentar") { onRetry() }
@@ -108,7 +108,7 @@ struct HomeAddressSelector: View {
             } else if addresses.isEmpty && !isLoading {
                 Text("Aún no tienes direcciones guardadas")
                     .fatumStyle(.footer)
-                    .foregroundStyle(.text.opacity(0.7))
+                    .foregroundStyle(.text)
                     .padding(layout.internalPadding)
                 divider
             }
@@ -168,7 +168,7 @@ struct HomeAddressSelector: View {
                 if !address.cityAndCountry.isEmpty {
                     Text(address.cityAndCountry)
                         .fatumStyle(.footer)
-                        .foregroundStyle(Color.text.opacity(0.7))
+                        .foregroundStyle(Color.text)
                         .lineLimit(1)
                 }
             }

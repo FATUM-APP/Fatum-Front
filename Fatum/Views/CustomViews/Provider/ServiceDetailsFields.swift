@@ -67,11 +67,11 @@ struct ServiceDetailsFields: View {
 
                 Text("Cargando subcategorías de \(rootName)…")
                     .fatumStyle(.footer)
-                    .foregroundStyle(.text.opacity(0.7))
+                    .foregroundStyle(.text)
             } else {
                 Text(errorMessage ?? "No se pudieron cargar las subcategorías de \(rootName)")
                     .fatumStyle(.footer)
-                    .foregroundStyle(.text.opacity(0.7))
+                    .foregroundStyle(.text)
                     .multilineTextAlignment(.center)
 
                 Button("Reintentar") {

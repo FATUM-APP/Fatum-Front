@@ -28,7 +28,7 @@ struct LabeledToggle: View {
 
                 Text(message)
                     .fatumStyle(.footer)
-                    .foregroundStyle(.text.opacity(0.7))
+                    .foregroundStyle(.text)
                     .multilineTextAlignment(.leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

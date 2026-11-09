@@ -30,12 +30,19 @@ struct FixedQuestion: Codable, Hashable, Identifiable {
         }
     }
 
-    /// Formats the question the same way the backend does:
-    /// `_question.trim().lowercase().replaceFirstChar { it.uppercase() }`
+    /// Trims and lowercases the question, then capitalizes its first character after
+    /// any opening punctuation: "¿TIENES alergias?" → "¿Tienes alergias?".
+    /// A question that starts with a number ("2 personas?") is left as is.
+    /// The backend still capitalizes the first character
+    /// (`_question.trim().lowercase().replaceFirstChar { it.uppercase() }`), so it
+    /// needs the same change for both sides to store the same text.
     static func formatQuestion(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard let first = trimmed.first else { return "" }
-        return first.uppercased() + trimmed.dropFirst()
+        guard let letterIndex = trimmed.firstIndex(where: { $0.isLetter || $0.isNumber }),
+              trimmed[letterIndex].isLetter else { return trimmed }
+        return trimmed[..<letterIndex]
+            + trimmed[letterIndex].uppercased()
+            + trimmed[trimmed.index(after: letterIndex)...]
     }
 
     private enum CodingKeys: String, CodingKey {

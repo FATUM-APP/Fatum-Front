@@ -17,7 +17,7 @@ import SwiftUI
 /// - `Router<AuthRoute>` in `ContentView` (before sign-in).
 /// - `Router<ProfileRoute>` in `ProfileScreen` (after sign-in).
 /// - `Router<ProfileRoute>` in `HomeView`, to reach `AddressesScreen` from the address selector.
-/// - `Router<ProviderRoute>` in `ProviderScreen` (the professional's "Mis servicios" tab).
+/// - `Router<ProviderRoute>` in `MyServicesScreen` (the professional's "Mis servicios" tab).
 ///
 /// Modal flows (`fullScreenCover`) are not part of a stack, so they keep using
 /// `@Environment(\.dismiss)`.

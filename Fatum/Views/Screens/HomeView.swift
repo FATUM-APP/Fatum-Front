@@ -233,7 +233,7 @@ struct HomeContentView<Route: Hashable>: View {
 
                     Text(catalogProvider.error ?? "Revisa tu conexión e inténtalo de nuevo")
                         .fatumStyle(.body)
-                        .foregroundStyle(.text.opacity(0.7))
+                        .foregroundStyle(.text)
                         .multilineTextAlignment(.center)
 
                     Button("Reintentar") {
@@ -304,7 +304,7 @@ struct HomeContentView<Route: Hashable>: View {
 
                         Text(service.providerName)
                             .fatumStyle(.footer)
-                            .foregroundStyle(.text.opacity(0.7))
+                            .foregroundStyle(.text)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -327,7 +327,7 @@ struct HomeContentView<Route: Hashable>: View {
             if let message {
                 Text(message)
                     .fatumStyle(.body)
-                    .foregroundStyle(.text.opacity(0.7))
+                    .foregroundStyle(.text)
             }
         }
         .frame(maxWidth: .infinity)

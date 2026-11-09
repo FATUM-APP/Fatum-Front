@@ -99,7 +99,7 @@ struct CreateServiceScreen: View {
     }
 
     private var formContent: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: layout.internalSpacing) {
             stepIndicator
 
             ScrollView {
@@ -112,7 +112,7 @@ struct CreateServiceScreen: View {
 
                         Text(stepSubtitle)
                             .fatumStyle(.body)
-                            .foregroundStyle(.text.opacity(0.7))
+                            .foregroundStyle(.text)
                     }
 
                     // Form fields per step
@@ -146,7 +146,6 @@ struct CreateServiceScreen: View {
                         }
                     }
                 }
-                .screenPadding()
             }
             .scrollDismissesKeyboard(.interactively)
 
@@ -155,8 +154,8 @@ struct CreateServiceScreen: View {
                 advanceStep()
             }
             .buttonStyle(.fatumButton(variant: .third))
-            .screenPadding([.horizontal, .bottom])
         }
+        .screenPadding()
         .background(.brandSecondary)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -175,20 +174,18 @@ struct CreateServiceScreen: View {
     private var stepIndicator: some View {
         VStack(alignment: .leading, spacing: layout.spacingSmall) {
             Text("Paso \(stepIndex + 1) de \(CreateStep.allCases.count)")
-                .fatumStyle(.footer)
+                .fatumStyle(.caption)
                 .fontWeight(.bold)
-                .foregroundStyle(.text.opacity(0.7))
+                .foregroundStyle(.text)
 
             HStack(spacing: layout.spacingSmall) {
                 ForEach(0..<CreateStep.allCases.count, id: \.self) { index in
                     Capsule()
-                        .fill(index <= stepIndex ? Color.brandPrimary : Color.border)
+                        .fill(index <= stepIndex ? Color.fatumAccent : Color.secondaryContainer)
                         .frame(height: 4)
                 }
             }
         }
-        .screenPadding(.horizontal)
-        .padding(.vertical, layout.spacingMedium)
     }
 
     // MARK: - Step Titles
@@ -344,15 +341,17 @@ struct CreateServiceScreen: View {
             showMessage("Revisa la información del servicio antes de publicarlo")
             return
         }
-        let images = draft.imageData
-        guard !images.isEmpty else {
-            showMessage("No se pudieron procesar las imágenes seleccionadas")
-            return
-        }
-
         isLoading = true
 
         Task {
+            // Scaling and encoding up to 10 photos takes a moment, so it runs after the spinner shows.
+            let images = draft.imageData
+            guard !images.isEmpty else {
+                isLoading = false
+                showMessage("No se pudieron procesar las imágenes seleccionadas")
+                return
+            }
+
             let success = await catalogProvider.createItem(request, images: images)
             isLoading = false
 
