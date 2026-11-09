@@ -18,33 +18,32 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             Tab(value: 0) {
-                HomeView()
+                if isProfessional {
+                    BuildingView(name: "Inicio")
+                } else {
+                    HomeView()
+                }
             } label: {
                 Image(systemName: "house")
                 Text("Inicio")
             }
 
-            if isProfessional {
-                Tab(value: 1) {
-                    BuildingView(name: "Mis servicios")
-                } label: {
-                    Image(systemName: "briefcase")
-                    Text("Mis servicios")
-                }
-            } else {
-                Tab(value: 1) {
+            Tab(value: 1) {
+                if isProfessional {
+                    ProviderScreen()
+                } else {
                     BuildingView(name: "Favoritos")
-                } label: {
-                    Image(systemName: "heart")
-                    Text("Favoritos")
                 }
+            } label: {
+                Image(systemName: isProfessional ? "briefcase" : "heart")
+                Text(isProfessional ? "Mis servicios" : "Favoritos")
             }
 
             Tab(value: 2) {
-                BuildingView(name: "Negociación")
+                BuildingView(name: "Calendario")
             } label: {
-                Image(systemName: "person.2")
-                Text("Negociación")
+                Image(systemName: "calendar")
+                Text("Calendario")
             }
 
             Tab(value: 3) {

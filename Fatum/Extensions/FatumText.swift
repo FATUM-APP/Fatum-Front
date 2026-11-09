@@ -15,7 +15,7 @@ struct FatumTextStyle: ViewModifier {
         switch type {
         case .premiumHeader:
             content
-                .font(.custom("PlayDisplay-Regular", size: 24 * scale))
+                .font(.custom("PlayfairDisplay-Regular", size: 24 * scale))
                 .fontWeight(.medium)
         case .header:
             content

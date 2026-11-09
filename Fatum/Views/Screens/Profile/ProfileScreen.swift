@@ -99,6 +99,7 @@ struct ProfileScreen: View {
             .screenPadding()
             .animation(.easeInOut, value: showToast)
             .background(.brandSecondary)
+            .toolbar(.visible, for: .tabBar)
             .profileDestinations()
         }
         .environment(router)

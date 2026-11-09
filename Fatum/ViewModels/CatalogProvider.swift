@@ -19,6 +19,25 @@ class CatalogProvider {
         case category(FatumCategory)
     }
 
+    /// Mirrors the backend's `CreateServiceRequest` DTO (`fatum.catalog.dto.request.item.CreateServiceRequest`).
+    struct CreateServiceRequest: Encodable {
+        static let providerIdMaxLength = 36
+        static let titleMaxLength = 40
+        static let descriptionMaxLength = 1000
+        static let categoryMaxLength = 30
+
+        let providerId: String
+        let title: String
+        let description: String?
+        let basePrice: Decimal
+        let priceType: PriceType
+        let isNegotiable: Bool
+        let defaultEstimatedTime: Int?
+        var jobType: JobType = .PRESENCIAL
+        let category: String
+        let fixedQuestions: [FixedQuestion]
+    }
+
     var categories: [FatumCategory] = []
     var selectedFilter: ServiceFilter? = nil
     var services: [FatumItem] = []
@@ -83,6 +102,62 @@ class CatalogProvider {
         guard selectedFilter == filter else { return }
         services = fetched
         isLoadingServices = false
+    }
+
+    // MARK: - Create Item
+
+    /// Sends a `multipart/form-data` POST to `/catalog/item/create` with `@RequestPart("request")`
+    /// as JSON and `@RequestPart("images")` as JPEG files.
+    func createItem(_ body: CreateServiceRequest, images: [Data]) async -> Bool {
+        error = nil
+        do {
+            let idToken = try await fetchIdToken()
+            let boundary = UUID().uuidString
+            let url = URL(string: "\(catalogBaseURL)/item/create")!
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+            let requestJSON = try JSONEncoder().encode(body)
+            var multipart = Data()
+            let crlf = "\r\n"
+
+            // Part: request (CreateServiceRequest JSON)
+            multipart.append("--\(boundary)\(crlf)".data(using: .utf8)!)
+            multipart.append("Content-Disposition: form-data; name=\"request\"; filename=\"request.json\"\(crlf)".data(using: .utf8)!)
+            multipart.append("Content-Type: application/json\(crlf)\(crlf)".data(using: .utf8)!)
+            multipart.append(requestJSON)
+            multipart.append(crlf.data(using: .utf8)!)
+
+            // Part: images (List<MultipartFile>)
+            for (index, imageData) in images.enumerated() {
+                multipart.append("--\(boundary)\(crlf)".data(using: .utf8)!)
+                multipart.append("Content-Disposition: form-data; name=\"images\"; filename=\"image_\(index + 1).jpg\"\(crlf)".data(using: .utf8)!)
+                multipart.append("Content-Type: image/jpeg\(crlf)\(crlf)".data(using: .utf8)!)
+                multipart.append(imageData)
+                multipart.append(crlf.data(using: .utf8)!)
+            }
+
+            multipart.append("--\(boundary)--\(crlf)".data(using: .utf8)!)
+            request.httpBody = multipart
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+            guard (200...299).contains(statusCode) else {
+                Self.logErrorResponse("POST", "/catalog/item/create", statusCode: statusCode, data: data)
+                self.error = Self.parseErrorMessage(from: data) ?? "Error del servidor (\(statusCode))"
+                return false
+            }
+
+            return true
+        } catch {
+            print("DEBUG POST /catalog/item/create error: \(error)")
+            self.error = error.localizedDescription
+            return false
+        }
     }
 
     // MARK: - Helpers

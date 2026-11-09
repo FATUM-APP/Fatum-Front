@@ -10,8 +10,11 @@ import SwiftUI
 ///
 /// All loading and creation goes through `AddressProvider`, which this screen
 /// owns and shares with `AddAddressScreen` through the environment.
-struct AddressesScreen: View {
-    @Environment(Router<ProfileRoute>.self) private var router
+///
+/// `Route` is the route type of the stack that pushed it (`ProfileRoute` from the
+/// Profile and Home tabs, `ProviderRoute` from Home inside "Mis servicios").
+struct AddressesScreen<Route: Hashable>: View {
+    @Environment(Router<Route>.self) private var router
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @State private var addressProvider = AddressProvider()
@@ -267,7 +270,7 @@ struct AddressesScreen: View {
 
 #Preview {
     NavigationStack {
-        AddressesScreen()
+        AddressesScreen<ProfileRoute>()
     }
     .environment(Router<ProfileRoute>())
 }

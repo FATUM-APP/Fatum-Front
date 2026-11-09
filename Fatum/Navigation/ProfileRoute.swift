@@ -21,10 +21,13 @@ extension View {
             switch route {
             case .manageProfile:
                 ManageProfileScreen()
+                    .toolbar(.hidden, for: .tabBar)
             case .addresses:
-                AddressesScreen()
+                AddressesScreen<ProfileRoute>()
+                    .toolbar(.hidden, for: .tabBar)
             case .updateUser(let fieldType):
                 UpdateUserScreen(fieldType: fieldType)
+                    .toolbar(.hidden, for: .tabBar)
             }
         }
     }

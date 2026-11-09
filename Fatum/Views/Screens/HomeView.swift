@@ -7,12 +7,35 @@
 
 import SwiftUI
 
+/// Root of the Home tab for non-professional users. Owns its own `NavigationStack`.
 struct HomeView: View {
+    /// Home reuses `ProfileRoute` so "Administrar direcciones" can push the same `AddressesScreen`.
+    @State private var router = Router<ProfileRoute>()
+
+    var body: some View {
+        NavigationStack(path: $router.path) {
+            HomeContentView(addressesRoute: ProfileRoute.addresses)
+                .profileDestinations()
+        }
+        .environment(router)
+    }
+}
+
+/// Content of Home without its own `NavigationStack`, so the same screen works
+/// as the root of the Home tab and pushed onto another stack (`ProviderRoute.home`).
+///
+/// `Route` is the route type of the stack it lives in: navigation goes through
+/// `Router<Route>` from the environment, and `addressesRoute` is pushed for
+/// "Administrar direcciones". When pushed, `showsBackButton` adds a back button
+/// that pops the router.
+struct HomeContentView<Route: Hashable>: View {
+    let addressesRoute: Route
+    var showsBackButton: Bool = false
+
+    @Environment(Router<Route>.self) private var router
     @Environment(UserProvider.self) private var userProvider
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    /// Home reuses `ProfileRoute` so "Administrar direcciones" can push the same `AddressesScreen`.
-    @State private var router = Router<ProfileRoute>()
     /// Root category whose sub-categories are listed and whose services "Todas" shows.
     @State private var catalogProvider = CatalogProvider(root: "Belleza")
     @State private var addressProvider = AddressProvider()
@@ -47,88 +70,97 @@ struct HomeView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $router.path) {
-            ZStack {
-                Color.brandSecondary
-                    .ignoresSafeArea()
+        ZStack {
+            Color.brandSecondary
+                .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: layout.externalSpacing) {
-                        HomeAddressSelector(
-                            addresses: addressProvider.addresses,
-                            principal: addressProvider.principal,
-                            selected: $selectedAddress,
-                            isLoading: addressProvider.isLoading,
-                            errorMessage: addressProvider.loadFailed ? addressProvider.error : nil,
-                            onMakePrincipal: makePrincipal,
-                            onAdd: { showAddAddress = true },
-                            onManage: { router.push(.addresses) },
-                            onRetry: { Task { await addressProvider.loadAddresses() } }
-                        )
+            ScrollView {
+                VStack(alignment: .leading, spacing: layout.externalSpacing) {
+                    HomeAddressSelector(
+                        addresses: addressProvider.addresses,
+                        principal: addressProvider.principal,
+                        selected: $selectedAddress,
+                        isLoading: addressProvider.isLoading,
+                        errorMessage: addressProvider.loadFailed ? addressProvider.error : nil,
+                        onMakePrincipal: makePrincipal,
+                        onAdd: { showAddAddress = true },
+                        onManage: { router.push(addressesRoute) },
+                        onRetry: { Task { await addressProvider.loadAddresses() } }
+                    )
 
-                        greetingCard
+                    greetingCard
 
-                        categoriesSection
+                    categoriesSection
 
-                        servicesSection
-                    }
-                    .screenPadding()
+                    servicesSection
                 }
-                .scrollDismissesKeyboard(.interactively)
+                .screenPadding()
             }
-            .overlay(alignment: .bottom) {
-                if showToast {
-                    ToastMessageView(message: toastMessage)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .onAppear {
-                            Task {
-                                try? await Task.sleep(for: .seconds(3))
-                                withAnimation {
-                                    showToast = false
-                                }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .overlay(alignment: .bottom) {
+            if showToast {
+                ToastMessageView(message: toastMessage)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .onAppear {
+                        Task {
+                            try? await Task.sleep(for: .seconds(3))
+                            withAnimation {
+                                showToast = false
                             }
                         }
-                }
+                    }
             }
-            .animation(.easeInOut, value: showToast)
-            // Runs again when coming back from `AddressesScreen`, which has its own provider.
-            .task {
-                await addressProvider.loadAddresses()
-            }
-            // Downloads the Spanish speech model ahead of time so voice search is ready.
-            .task {
-                await VoiceRecorder.prepareSpeechModel()
-            }
-            .task {
-                if catalogProvider.categories.isEmpty {
-                    await catalogProvider.loadCategories()
-                }
-                if catalogProvider.selectedFilter == nil {
-                    await catalogProvider.selectFilter(.all)
-                }
-            }
-            .onChange(of: addressProvider.addresses) {
-                syncSelectedAddress()
-            }
-            .onChange(of: selectedAddress) { _, address in
-                saveSelectedAddress(address)
-            }
-            .sheet(isPresented: $showAllCategories) {
-                AllCategoriesSheet(
-                    categories: availableCategories,
-                    onSelect: select
-                )
-            }
-            // Same flow as in `AddressesScreen`; `createAddress` reloads this provider's list.
-            .fullScreenCover(isPresented: $showAddAddress) {
-                AddAddressScreen { message in
-                    showMessage(message)
-                }
-                .environment(addressProvider)
-            }
-            .profileDestinations()
         }
-        .environment(router)
+        .animation(.easeInOut, value: showToast)
+        .navigationBarBackButtonHidden(showsBackButton)
+        .toolbar {
+            if showsBackButton {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        router.pop()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .foregroundStyle(.text)
+                    }
+                }
+            }
+        }
+        // Runs again when coming back from `AddressesScreen`, which has its own provider.
+        .task {
+            await addressProvider.loadAddresses()
+        }
+        // Downloads the Spanish speech model ahead of time so voice search is ready.
+        .task {
+            await VoiceRecorder.prepareSpeechModel()
+        }
+        .task {
+            if catalogProvider.categories.isEmpty {
+                await catalogProvider.loadCategories()
+            }
+            if catalogProvider.selectedFilter == nil {
+                await catalogProvider.selectFilter(.all)
+            }
+        }
+        .onChange(of: addressProvider.addresses) {
+            syncSelectedAddress()
+        }
+        .onChange(of: selectedAddress) { _, address in
+            saveSelectedAddress(address)
+        }
+        .sheet(isPresented: $showAllCategories) {
+            AllCategoriesSheet(
+                categories: availableCategories,
+                onSelect: select
+            )
+        }
+        // Same flow as in `AddressesScreen`; `createAddress` reloads this provider's list.
+        .fullScreenCover(isPresented: $showAddAddress) {
+            AddAddressScreen { message in
+                showMessage(message)
+            }
+            .environment(addressProvider)
+        }
     }
 
     // MARK: - Greeting
