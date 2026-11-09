@@ -80,11 +80,7 @@ struct ServiceDraft {
 
     /// "1h 30m", "2 h", "45 min" or "No especificado".
     var estimatedTimeDisplay: String {
-        guard let minutes = estimatedTime, minutes > 0 else { return "No especificado" }
-        guard minutes >= 60 else { return "\(minutes) min" }
-        let hours = minutes / 60
-        let remainder = minutes % 60
-        return remainder > 0 ? "\(hours)h \(remainder)m" : "\(hours) h"
+        FatumFormat.estimatedTime(minutes: estimatedTime) ?? "No especificado"
     }
 
     // MARK: - Request
@@ -111,6 +107,51 @@ struct ServiceDraft {
             defaultEstimatedTime: estimatedTime,
             category: category.name,
             fixedQuestions: fixedQuestions
+        )
+    }
+
+    /// Same checks as `isComplete` except the category, which can't change after publishing.
+    var isCompleteForUpdate: Bool {
+        let trimmedTime = estimatedTimeText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return hasValidInfo && hasValidPricing && hasValidPhotos
+            && (trimmedTime.isEmpty || estimatedTime != nil)
+    }
+
+    /// Builds the body of `PUT /catalog/item/update` for service `id`, or `nil`
+    /// while the draft is incomplete. Every field is sent, so the service ends up
+    /// exactly as the draft shows it.
+    func updateRequest(id: String) -> CatalogProvider.UpdateServiceRequest? {
+        guard isCompleteForUpdate, let basePrice else { return nil }
+        return CatalogProvider.UpdateServiceRequest(
+            id: id,
+            title: trimmedTitle,
+            description: trimmedDescription,
+            basePrice: basePrice,
+            priceType: priceType,
+            isNegotiable: isNegotiable,
+            defaultEstimatedTime: estimatedTime,
+            fixedQuestions: fixedQuestions
+        )
+    }
+}
+
+// MARK: - Existing services
+
+extension ServiceDraft {
+    /// A draft filled with a published service, to show or edit it.
+    /// `category` is the `FatumCategory` whose name matches `item.category`, if it's known.
+    init(item: FatumItem, category: FatumCategory?, images: [UIImage]) {
+        self.init(
+            title: item.title,
+            descriptionText: item.description ?? "",
+            // Same "50.000" grouping the price field shows while typing.
+            basePriceText: Decimal(string: item.basePrice).map(FatumFormat.price) ?? "",
+            priceType: PriceType(rawValue: item.priceType) ?? .FIXED,
+            isNegotiable: item.isNegotiable,
+            estimatedTimeText: item.defaultEstimatedTime.map(String.init) ?? "",
+            category: category,
+            fixedQuestions: item.fixedQuestions ?? [],
+            images: images
         )
     }
 }

@@ -356,7 +356,8 @@ struct CreateServiceScreen: View {
             isLoading = false
 
             if success {
-                router.pop(message: "Servicio creado exitosamente")
+                // Back to "Mis servicios", which reloads its list.
+                router.pop()
             } else {
                 showMessage(catalogProvider.error ?? "No se pudo crear el servicio")
             }

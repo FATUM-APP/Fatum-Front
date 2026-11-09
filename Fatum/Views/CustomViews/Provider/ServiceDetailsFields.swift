@@ -8,10 +8,12 @@ import SwiftUI
 /// Estimated time and category of a `ServiceDraft`. The category picker lists
 /// the sub-categories of `rootName`; while they load, or after a failure, a
 /// placeholder with a retry button takes its place (like `HomeAddressSelector`).
+/// Pass `showsCategory: false` when the category can't be changed (editing a published service).
 struct ServiceDetailsFields: View {
     @Binding var draft: ServiceDraft
     let rootName: String
     let categories: [FatumCategory]
+    var showsCategory: Bool = true
     var isLoading: Bool = false
     var errorMessage: String? = nil
     var onRetry: () -> Void = {}
@@ -36,7 +38,9 @@ struct ServiceDetailsFields: View {
                 allowedCharacters: { _, newValue in newValue.filter(\.isNumber) }
             )
 
-            if let first = categories.first, !isLoading {
+            if !showsCategory {
+                EmptyView()
+            } else if let first = categories.first, !isLoading {
                 LabeledPicker(
                     label: "Categoría (\(rootName))",
                     options: categories,

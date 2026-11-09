@@ -14,8 +14,11 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack(path: $router.path) {
-            HomeContentView(addressesRoute: ProfileRoute.addresses)
-                .profileDestinations()
+            HomeContentView(
+                addressesRoute: ProfileRoute.addresses,
+                serviceRoute: ProfileRoute.serviceDetail
+            )
+            .profileDestinations()
         }
         .environment(router)
     }
@@ -25,11 +28,12 @@ struct HomeView: View {
 /// as the root of the Home tab and pushed onto another stack (`ProviderRoute.home`).
 ///
 /// `Route` is the route type of the stack it lives in: navigation goes through
-/// `Router<Route>` from the environment, and `addressesRoute` is pushed for
-/// "Administrar direcciones". When pushed, `showsBackButton` adds a back button
-/// that pops the router.
+/// `Router<Route>` from the environment: `addressesRoute` is pushed for
+/// "Administrar direcciones" and `serviceRoute` when a service card is tapped.
+/// When pushed, `showsBackButton` adds a back button that pops the router.
 struct HomeContentView<Route: Hashable>: View {
     let addressesRoute: Route
+    let serviceRoute: (FatumItem) -> Route
     var showsBackButton: Bool = false
 
     @Environment(Router<Route>.self) private var router
@@ -293,20 +297,17 @@ struct HomeContentView<Route: Hashable>: View {
                 message: "Ningún servicio coincide con tu búsqueda"
             )
         } else {
-            // Placeholder rows until the service card is designed.
-            VStack(alignment: .leading, spacing: layout.internalSpacing) {
+            VStack(spacing: layout.internalSpacing) {
                 ForEach(visibleServices, id: \.self) { service in
-                    VStack(alignment: .leading, spacing: layout.tiny) {
-                        Text(service.title)
-                            .fatumStyle(.body)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.text)
-
-                        Text(service.providerName)
-                            .fatumStyle(.footer)
-                            .foregroundStyle(.text)
+                    Button {
+                        router.push(serviceRoute(service))
+                    } label: {
+                        ServiceCardView(
+                            service: service,
+                            imageURL: service.id.flatMap { catalogProvider.coverImageURLs[$0] }
+                        )
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .buttonStyle(.plain)
                 }
             }
         }

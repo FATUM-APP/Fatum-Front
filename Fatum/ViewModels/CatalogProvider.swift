@@ -7,8 +7,9 @@ import SwiftUI
 import Amplify
 import AWSPluginsCore
 
-/// Owns the catalog shown on Home: the sub-categories of a root category and
-/// the services of the filter the user selected ("Todas" or one sub-category).
+/// Owns a catalog list: the sub-categories of a root category and the services
+/// of the filter the user selected ("Todas" or one sub-category). Home lists
+/// every provider's services; "Mis servicios" lists only the signed-in provider's.
 @MainActor
 @Observable
 class CatalogProvider {
@@ -38,6 +39,20 @@ class CatalogProvider {
         let fixedQuestions: [FixedQuestion]
     }
 
+    /// Mirrors the backend's `UpdateServiceRequest` DTO. There is no category:
+    /// it can't change once the service is published.
+    struct UpdateServiceRequest: Encodable {
+        let id: String
+        let title: String
+        let description: String
+        let basePrice: Decimal
+        let priceType: PriceType
+        let isNegotiable: Bool
+        let defaultEstimatedTime: Int?
+        var jobType: JobType = .PRESENCIAL
+        let fixedQuestions: [FixedQuestion]
+    }
+
     var categories: [FatumCategory] = []
     var selectedFilter: ServiceFilter? = nil
     var services: [FatumItem] = []
@@ -45,6 +60,9 @@ class CatalogProvider {
     /// `true` when the last `loadCategories` request failed; `error` holds the message.
     var categoriesLoadFailed = false
     var isLoadingServices = false
+    /// URL of the first photo of each service, keyed by item id. Filled after the
+    /// services load; a service without an entry shows a placeholder.
+    var coverImageURLs: [String: String] = [:]
     var error: String? = nil
 
     /// Root category whose sub-categories are listed and whose services "Todas" shows.
@@ -105,21 +123,125 @@ class CatalogProvider {
         guard selectedFilter == filter else { return }
         services = fetched
         isLoadingServices = false
+
+        await loadCoverImages(for: fetched)
     }
 
-    // MARK: - Create Item
+    // MARK: - Provider Services
 
-    /// Sends a `multipart/form-data` POST to `/catalog/item/create` with `@RequestPart("request")`
-    /// as JSON and `@RequestPart("images")` as JPEG files.
+    /// Selects `filter` and loads the services of one provider with
+    /// `GET /catalog/item/provider?providerId=...&category=...`. `.all` leaves out
+    /// `category`, so every service of the provider comes back. Cover photos load afterwards.
+    func selectProviderFilter(_ filter: ServiceFilter, providerId: String) async {
+        selectedFilter = filter
+        services = []
+        isLoadingServices = true
+
+        var queryItems = [URLQueryItem(name: "providerId", value: providerId)]
+        if case .category(let category) = filter {
+            queryItems.append(URLQueryItem(name: "category", value: category.name))
+        }
+
+        let fetched = await fetchList(FatumItem.self, path: "/item/provider", queryItems: queryItems) ?? []
+
+        // Ignore a late response if the user picked another filter meanwhile.
+        guard selectedFilter == filter else { return }
+        services = fetched
+        isLoadingServices = false
+
+        await loadCoverImages(for: fetched)
+    }
+
+    /// Fetches the photos of every service that has no cover yet, in parallel,
+    /// and keeps the first one of each in `coverImageURLs`.
+    private func loadCoverImages(for items: [FatumItem]) async {
+        let ids = items.compactMap(\.id).filter { coverImageURLs[$0] == nil }
+        await withTaskGroup(of: (String, String?).self) { group in
+            for id in ids {
+                group.addTask { (id, await self.fetchCoverImageURL(itemId: id)) }
+            }
+            for await (id, url) in group {
+                if let url { coverImageURLs[id] = url }
+            }
+        }
+    }
+
+    /// `GET /catalog/item/images?id=...` and returns the first photo's URL.
+    /// Failures only mean the card shows a placeholder, so they don't touch `error`.
+    private func fetchCoverImageURL(itemId: String) async -> String? {
+        do {
+            let request = try await authorizedRequest(
+                path: "/item/images",
+                queryItems: [URLQueryItem(name: "id", value: itemId)]
+            )
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200...299).contains(statusCode) else {
+                Self.logErrorResponse("GET", "/catalog/item/images", statusCode: statusCode, data: data)
+                return nil
+            }
+            return try JSONDecoder().decode([CatalogImage].self, from: data).first?.url
+        } catch {
+            print("DEBUG GET /catalog/item/images error: \(error)")
+            return nil
+        }
+    }
+
+    // MARK: - Create & Update Item
+
+    /// `POST /catalog/item/create`.
     func createItem(_ body: CreateServiceRequest, images: [Data]) async -> Bool {
+        await sendItem(body, images: images, method: "POST", path: "/item/create")
+    }
+
+    /// `PUT /catalog/item/update`. The photos sent replace the service's current ones.
+    func updateItem(_ body: UpdateServiceRequest, images: [Data]) async -> Bool {
+        await sendItem(body, images: images, method: "PUT", path: "/item/update")
+    }
+
+    /// Downloads every photo of a service (`GET /catalog/item/images` and then each URL),
+    /// keeping their order. Photos that fail to download are left out.
+    func loadImages(itemId: String) async -> [UIImage] {
+        guard let request = try? await authorizedRequest(
+            path: "/item/images",
+            queryItems: [URLQueryItem(name: "id", value: itemId)]
+        ),
+              let (data, response) = try? await URLSession.shared.data(for: request),
+              let statusCode = (response as? HTTPURLResponse)?.statusCode,
+              (200...299).contains(statusCode),
+              let catalogImages = try? JSONDecoder().decode([CatalogImage].self, from: data) else {
+            print("DEBUG GET /catalog/item/images failed for item \(itemId)")
+            return []
+        }
+
+        let urls = catalogImages.compactMap { URL(string: $0.url) }
+        let downloaded = await withTaskGroup(of: (Int, UIImage?).self) { group in
+            for (index, url) in urls.enumerated() {
+                group.addTask {
+                    let data = try? await URLSession.shared.data(from: url).0
+                    return (index, data.flatMap(UIImage.init(data:)))
+                }
+            }
+            var images: [Int: UIImage] = [:]
+            for await (index, image) in group {
+                images[index] = image
+            }
+            return images
+        }
+        return urls.indices.compactMap { downloaded[$0] }
+    }
+
+    /// Sends a `multipart/form-data` request with `@RequestPart("request")` as JSON
+    /// and `@RequestPart("images")` as JPEG files.
+    private func sendItem<Body: Encodable>(_ body: Body, images: [Data], method: String, path: String) async -> Bool {
         error = nil
         do {
             let idToken = try await fetchIdToken()
             let boundary = UUID().uuidString
-            let url = URL(string: "\(catalogBaseURL)/item/create")!
+            let url = URL(string: "\(catalogBaseURL)\(path)")!
 
             var request = URLRequest(url: url)
-            request.httpMethod = "POST"
+            request.httpMethod = method
             request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
             request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
@@ -127,7 +249,7 @@ class CatalogProvider {
             var multipart = Data()
             let crlf = "\r\n"
 
-            // Part: request (CreateServiceRequest JSON)
+            // Part: request (JSON body)
             multipart.append("--\(boundary)\(crlf)".data(using: .utf8)!)
             multipart.append("Content-Disposition: form-data; name=\"request\"; filename=\"request.json\"\(crlf)".data(using: .utf8)!)
             multipart.append("Content-Type: application/json\(crlf)\(crlf)".data(using: .utf8)!)
@@ -148,22 +270,22 @@ class CatalogProvider {
 
             // Sizes of what is being uploaded, to diagnose HTTP 413 (Request Entity Too Large).
             for (index, imageData) in images.enumerated() {
-                print("DEBUG POST /catalog/item/create image_\(index + 1).jpg: \(Self.megabytes(imageData.count))")
+                print("DEBUG \(method) /catalog\(path) image_\(index + 1).jpg: \(Self.megabytes(imageData.count))")
             }
-            print("DEBUG POST /catalog/item/create total body: \(Self.megabytes(multipart.count))")
+            print("DEBUG \(method) /catalog\(path) total body: \(Self.megabytes(multipart.count))")
 
             let (data, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
             guard (200...299).contains(statusCode) else {
-                Self.logErrorResponse("POST", "/catalog/item/create", statusCode: statusCode, data: data)
+                Self.logErrorResponse(method, "/catalog\(path)", statusCode: statusCode, data: data)
                 self.error = Self.parseErrorMessage(from: data) ?? "Error del servidor (\(statusCode))"
                 return false
             }
 
             return true
         } catch {
-            print("DEBUG POST /catalog/item/create error: \(error)")
+            print("DEBUG \(method) /catalog\(path) error: \(error)")
             self.error = error.localizedDescription
             return false
         }

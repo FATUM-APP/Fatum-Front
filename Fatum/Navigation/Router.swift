@@ -21,16 +21,10 @@ import SwiftUI
 ///
 /// Modal flows (`fullScreenCover`) are not part of a stack, so they keep using
 /// `@Environment(\.dismiss)`.
-///
-/// Routes are `Hashable` and can't carry callbacks, so a screen that finishes a
-/// task calls `pop(message:)`; the root of the stack observes `message`, shows it
-/// in a toast and clears it.
 @MainActor
 @Observable
 final class Router<Route: Hashable> {
     var path = NavigationPath()
-    /// Result to show on the screen revealed by `pop(message:)`, e.g. "Servicio creado exitosamente".
-    var message: String? = nil
 
     func push(_ route: Route) {
         path.append(route)
@@ -39,11 +33,6 @@ final class Router<Route: Hashable> {
     func pop() {
         guard !path.isEmpty else { return }
         path.removeLast()
-    }
-
-    func pop(message: String) {
-        self.message = message
-        pop()
     }
 
     func popToRoot() {

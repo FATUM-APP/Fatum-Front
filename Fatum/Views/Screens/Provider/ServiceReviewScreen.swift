@@ -5,20 +5,35 @@
 
 import SwiftUI
 
-/// Last screen of the create-service flow. Shows the service the way clients
-/// will see it (photo carousel, title, provider, description, information grid),
-/// lets the provider edit every section in a sheet, previews the hiring controls
-/// (date and time, fixed questions, negotiated price) and publishes with "Ofrecer servicio".
+/// The service page: photo carousel, title, provider, description, information
+/// grid, the hiring controls (date and time, fixed questions, negotiated price)
+/// and the dark hiring bar. Used in three modes:
 ///
-/// "Contratar" is shown as clients will see it but does nothing here: the
-/// provider can't hire their own service.
+/// - `.create`: last step of `CreateServiceScreen`. Every section is editable in a
+///   sheet and "Ofrecer servicio" publishes it.
+/// - `.edit`: the provider opened one of their services from "Mis servicios".
+///   Same as `.create`, but "Guardar cambios" updates it and the category can't change.
+/// - `.client`: a client opened the service from Home. Nothing is editable and
+///   "Contratar" is not available yet, so it shows a toast.
+///
+/// In `.create` and `.edit`, "Contratar" is shown as clients will see it but does
+/// nothing: the provider can't hire their own service.
 struct ServiceReviewScreen: View {
+    enum Mode {
+        case create
+        case edit
+        case client
+    }
+
     @Binding var draft: ServiceDraft
     let rootName: String
     let categories: [FatumCategory]
-    let isSubmitting: Bool
+    var mode: Mode = .create
+    /// Shown in `.client` mode; the other modes show the signed-in provider.
+    var providerName: String? = nil
+    var isSubmitting: Bool = false
     let onBack: () -> Void
-    let onPublish: () -> Void
+    var onPublish: () -> Void = {}
 
     @Environment(UserProvider.self) private var userProvider
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -40,6 +55,9 @@ struct ServiceReviewScreen: View {
     // Hiring preview
     @State private var selectedDate = Date()
     @State private var proposedPrice: Decimal = 0
+
+    @State private var showToast = false
+    @State private var toastMessage: String = ""
 
     private let heroHeight: CGFloat = 340
     private let avatarSize: CGFloat = 44
@@ -71,8 +89,14 @@ struct ServiceReviewScreen: View {
     /// Placeholder until the service has real reviews.
     private let placeholderRating = 5
 
-    private var providerName: String {
-        userProvider.currentUser?.name.capitalized ?? "Profesional"
+    /// Only the provider can change the service; clients just see it.
+    private var canEdit: Bool {
+        mode != .client
+    }
+
+    private var displayedProviderName: String {
+        let name = mode == .client ? providerName : userProvider.currentUser?.name
+        return name?.capitalized ?? "Profesional"
     }
 
     // MARK: - Body
@@ -89,9 +113,12 @@ struct ServiceReviewScreen: View {
 
                             divider
 
-                            descriptionSection
+                            // No description means no section; the title's pencil still edits it.
+                            if !draft.trimmedDescription.isEmpty {
+                                descriptionSection
 
-                            divider
+                                divider
+                            }
 
                             informationSection
 
@@ -100,7 +127,9 @@ struct ServiceReviewScreen: View {
                             hiringSection
                                 .id(Self.hiringSectionID)
 
-                            publishSection
+                            if canEdit {
+                                publishSection
+                            }
                         }
                         .screenPadding()
                     }
@@ -115,6 +144,21 @@ struct ServiceReviewScreen: View {
             }
         }
         .background(.brandSecondary)
+        .overlay(alignment: .bottom) {
+            if showToast {
+                ToastMessageView(message: toastMessage)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .onAppear {
+                        Task {
+                            try? await Task.sleep(for: .seconds(3))
+                            withAnimation {
+                                showToast = false
+                            }
+                        }
+                    }
+            }
+        }
+        .animation(.easeInOut, value: showToast)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             proposedPrice = basePrice
@@ -130,7 +174,10 @@ struct ServiceReviewScreen: View {
             currentPhotoIndex = min(currentPhotoIndex, max(0, draft.images.count - 1))
         }
         .task {
-            providerImageURL = await userProvider.fetchProfileImageURL()
+            // There is no endpoint for another provider's photo yet, so clients see the placeholder.
+            if canEdit {
+                providerImageURL = await userProvider.fetchProfileImageURL()
+            }
         }
         .sheet(item: $editingSection) { section in
             editSheet(for: section)
@@ -194,18 +241,20 @@ struct ServiceReviewScreen: View {
 
                 Spacer()
 
-                Button {
-                    editingSection = .photos
-                } label: {
-                    Label("Editar fotos", systemImage: "photo.on.rectangle.angled")
-                        .fatumStyle(.footer)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.text)
-                        .padding(.horizontal, layout.internalSpacing)
-                        .padding(.vertical, layout.smallPadding)
-                        .glassEffect(.regular.interactive(), in: .capsule)
+                if canEdit {
+                    Button {
+                        editingSection = .photos
+                    } label: {
+                        Label("Editar fotos", systemImage: "photo.on.rectangle.angled")
+                            .fatumStyle(.footer)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.text)
+                            .padding(.horizontal, layout.internalSpacing)
+                            .padding(.vertical, layout.smallPadding)
+                            .glassEffect(.regular.interactive(), in: .capsule)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .disabled(isSubmitting)
             .padding(layout.internalPadding)
@@ -223,16 +272,18 @@ struct ServiceReviewScreen: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
 
-                Button {
-                    editingSection = .info
-                } label: {
-                    Image(systemName: "pencil")
-                        .foregroundStyle(.brandPrimary)
-                        .frame(width: editButtonSize, height: editButtonSize)
-                        .overlay(Circle().stroke(Color.border, lineWidth: 1))
+                if canEdit {
+                    Button {
+                        editingSection = .info
+                    } label: {
+                        Image(systemName: "pencil")
+                            .foregroundStyle(.brandPrimary)
+                            .frame(width: editButtonSize, height: editButtonSize)
+                            .overlay(Circle().stroke(Color.border, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Editar título")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Editar título")
             }
 
             if let category = draft.category {
@@ -264,7 +315,7 @@ struct ServiceReviewScreen: View {
                 VStack(spacing: layout.tiny) {
                     providerAvatar
 
-                    Text(providerName)
+                    Text(displayedProviderName)
                         .fatumStyle(.footer)
                         .fontWeight(.bold)
                         .foregroundStyle(.text)
@@ -342,9 +393,9 @@ struct ServiceReviewScreen: View {
                 editingSection = .info
             }
 
-            Text(draft.trimmedDescription.isEmpty ? "Sin descripción adicional para este servicio." : draft.trimmedDescription)
+            Text(draft.trimmedDescription)
                 .fatumStyle(.body)
-                .foregroundStyle(.text.opacity(draft.trimmedDescription.isEmpty ? 0.5 : 0.85))
+                .foregroundStyle(.text.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -360,7 +411,7 @@ struct ServiceReviewScreen: View {
             HStack(spacing: 0) {
                 infoCell("Precio", alignment: .leading) {
                     HStack(spacing: layout.tiny) {
-                        infoValue(Self.formatPrice(basePrice))
+                        infoValue(FatumFormat.price(basePrice))
 
                         negotiableIcon
                     }
@@ -422,7 +473,9 @@ struct ServiceReviewScreen: View {
                     .fatumStyle(.subheader)
                     .foregroundStyle(.text)
 
-                Text("Vista previa de lo que el cliente completará al contratar tu servicio")
+                Text(canEdit
+                     ? "Vista previa de lo que el cliente completará al contratar tu servicio"
+                     : "Completa estos datos para contratar el servicio")
                     .fatumStyle(.footer)
                     .foregroundStyle(.text)
             }
@@ -450,14 +503,14 @@ struct ServiceReviewScreen: View {
                     VStack(alignment: .leading, spacing: layout.internalSpacing) {
                         cardLabel("Proponer precio", icon: "banknote")
 
-                        Text("Precio sugerido por el profesional: \(Self.formatPrice(basePrice)) \(draft.priceType.unitLabel)")
+                        Text("Precio sugerido por el profesional: \(FatumFormat.price(basePrice)) \(draft.priceType.unitLabel)")
                             .fatumStyle(.footer)
                             .foregroundStyle(.text)
 
                         HStack(spacing: layout.internalSpacing) {
                             stepperButton(systemImage: "minus", delta: -priceStep)
 
-                            Text("\(Self.formatPrice(proposedPrice)) \(draft.priceType.unitLabel)")
+                            Text("\(FatumFormat.price(proposedPrice)) \(draft.priceType.unitLabel)")
                                 .fatumStyle(.body)
                                 .fontWeight(.bold)
                                 .foregroundStyle(.brandPrimary)
@@ -476,7 +529,9 @@ struct ServiceReviewScreen: View {
                 }
 
                 if draft.fixedQuestions.isEmpty {
-                    Text("No agregaste preguntas fijas para el cliente.")
+                    Text(canEdit
+                         ? "No agregaste preguntas fijas para el cliente."
+                         : "Este servicio no tiene preguntas.")
                         .fatumStyle(.footer)
                         .foregroundStyle(.text)
                 } else {
@@ -490,7 +545,9 @@ struct ServiceReviewScreen: View {
 
     private var publishSection: some View {
         VStack(alignment: .leading, spacing: layout.internalSpacing) {
-            Text("¿Todo listo para publicar tu servicio?")
+            Text(mode == .edit
+                 ? "¿Listo para guardar los cambios?"
+                 : "¿Todo listo para publicar tu servicio?")
                 .fatumStyle(.footer)
                 .foregroundStyle(.text)
 
@@ -501,7 +558,7 @@ struct ServiceReviewScreen: View {
                     ProgressView()
                         .tint(.brandSecondary)
                 } else {
-                    Text("Ofrecer servicio")
+                    Text(mode == .edit ? "Guardar cambios" : "Ofrecer servicio")
                 }
             }
             .buttonStyle(.fatumButton(variant: .third))
@@ -519,7 +576,7 @@ struct ServiceReviewScreen: View {
             Button(action: onOpenRequest) {
                 VStack(alignment: .leading, spacing: layout.tiny) {
                     HStack(alignment: .firstTextBaseline, spacing: layout.internalSpacing) {
-                        Text(Self.formatPrice(displayedPrice))
+                        Text(FatumFormat.price(displayedPrice))
                             .fatumStyle(.subheader)
                             .fontWeight(.bold)
                             .foregroundStyle(.brandSecondary)
@@ -547,12 +604,19 @@ struct ServiceReviewScreen: View {
 
             Spacer()
 
-            // Preview only: the provider can't hire their own service. `FatumButton`
-            // doesn't dim when disabled, so it keeps the look clients will see.
-            Button("Contratar") {}
+            if canEdit {
+                // Preview only: the provider can't hire their own service. `FatumButton`
+                // doesn't dim when disabled, so it keeps the look clients will see.
+                Button("Contratar") {}
+                    .buttonStyle(.fatumButton(variant: .compact))
+                    .disabled(true)
+                    .accessibilityHint("Vista previa: los clientes usarán este botón para contratar")
+            } else {
+                Button("Contratar") {
+                    showMessage("Función en construcción")
+                }
                 .buttonStyle(.fatumButton(variant: .compact))
-                .disabled(true)
-                .accessibilityHint("Vista previa: los clientes usarán este botón para contratar")
+            }
         }
         .padding(layout.internalPadding)
         .background(
@@ -573,7 +637,13 @@ struct ServiceReviewScreen: View {
                         ServiceInfoFields(draft: $draft)
                     case .details:
                         ServicePricingFields(draft: $draft)
-                        ServiceDetailsFields(draft: $draft, rootName: rootName, categories: categories)
+                        // `UpdateServiceRequest` has no category, so it can't change once published.
+                        ServiceDetailsFields(
+                            draft: $draft,
+                            rootName: rootName,
+                            categories: categories,
+                            showsCategory: mode == .create
+                        )
                     case .questions:
                         ForEach(draft.fixedQuestions) { question in
                             FixedQuestionCardView(question: question) {
@@ -622,6 +692,7 @@ struct ServiceReviewScreen: View {
 
     // MARK: - Helpers
 
+    /// Section title with an "Editar" button, which clients don't see.
     private func sectionHeader(_ title: String, onEdit: @escaping () -> Void) -> some View {
         HStack {
             Text(title)
@@ -630,13 +701,15 @@ struct ServiceReviewScreen: View {
 
             Spacer()
 
-            Button(action: onEdit) {
-                Label("Editar", systemImage: "pencil")
-                    .fatumStyle(.footer)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.brandPrimary)
+            if canEdit {
+                Button(action: onEdit) {
+                    Label("Editar", systemImage: "pencil")
+                        .fatumStyle(.footer)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.brandPrimary)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -697,9 +770,11 @@ struct ServiceReviewScreen: View {
         proposedPrice = max(0, proposedPrice + delta)
     }
 
-    /// "28.000": Colombian grouping, no decimals.
-    private static func formatPrice(_ value: Decimal) -> String {
-        value.formatted(.number.precision(.fractionLength(0)).locale(Locale(identifier: "es_CO")))
+    private func showMessage(_ message: String) {
+        toastMessage = message
+        withAnimation {
+            showToast = true
+        }
     }
 
     /// "12/09/25, 8:00 a. m."

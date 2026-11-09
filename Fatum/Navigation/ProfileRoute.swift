@@ -6,11 +6,13 @@
 import SwiftUI
 
 /// Destinations reachable from the Profile tab after the user signs in.
-/// Home reuses it to push `.addresses`.
+/// Home reuses it to push `.addresses` and `.serviceDetail`.
 enum ProfileRoute: Hashable {
     case manageProfile
     case addresses
     case updateUser(UserFieldType)
+    /// A service opened from Home, as clients see it.
+    case serviceDetail(FatumItem)
 }
 
 extension View {
@@ -27,6 +29,9 @@ extension View {
                     .toolbar(.hidden, for: .tabBar)
             case .updateUser(let fieldType):
                 UpdateUserScreen(fieldType: fieldType)
+                    .toolbar(.hidden, for: .tabBar)
+            case .serviceDetail(let service):
+                ServiceDetailScreen<ProfileRoute>(service: service, mode: .client)
                     .toolbar(.hidden, for: .tabBar)
             }
         }

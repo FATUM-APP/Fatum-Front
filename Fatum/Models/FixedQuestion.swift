@@ -46,28 +46,18 @@ struct FixedQuestion: Codable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case underscoreQuestion = "_question"
         case question
         case type
         case options
     }
 
+    /// Decodes through `init(question:type:options:)` so questions coming from
+    /// the backend get the same formatting and option cleanup as new ones.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let rawQuestion = try container.decodeIfPresent(String.self, forKey: .question)
-            ?? container.decode(String.self, forKey: .underscoreQuestion)
+        let rawQuestion = try container.decode(String.self, forKey: .question)
         let decodedType = try container.decode(QuestionType.self, forKey: .type)
         let decodedOptions = try container.decodeIfPresent([String].self, forKey: .options) ?? []
         self.init(question: rawQuestion, type: decodedType, options: decodedOptions)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        // Encode both `_question` (Kotlin constructor property) and `question`
-        // so Jackson deserializes the value object properly regardless of property naming config.
-        try container.encode(question, forKey: .underscoreQuestion)
-        try container.encode(question, forKey: .question)
-        try container.encode(type, forKey: .type)
-        try container.encode(options, forKey: .options)
     }
 }
