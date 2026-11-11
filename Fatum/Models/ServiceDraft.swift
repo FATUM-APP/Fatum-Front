@@ -118,20 +118,35 @@ struct ServiceDraft {
     }
 
     /// Builds the body of `PUT /catalog/item/update` for service `id`, or `nil`
-    /// while the draft is incomplete. Every field is sent, so the service ends up
-    /// exactly as the draft shows it.
-    func updateRequest(id: String) -> CatalogProvider.UpdateServiceRequest? {
+    /// while the draft is incomplete. Only the fields that differ from `original`
+    /// (the service as it was loaded) are sent. The backend always applies
+    /// `defaultEstimatedTime` and `fixedQuestions`, so those always carry the current value.
+    func updateRequest(id: String, original: ServiceDraft) -> CatalogProvider.UpdateServiceRequest? {
         guard isCompleteForUpdate, let basePrice else { return nil }
-        return CatalogProvider.UpdateServiceRequest(
+        var request = CatalogProvider.UpdateServiceRequest(
             id: id,
-            title: trimmedTitle,
-            description: trimmedDescription,
-            basePrice: basePrice,
-            priceType: priceType,
-            isNegotiable: isNegotiable,
             defaultEstimatedTime: estimatedTime,
             fixedQuestions: fixedQuestions
         )
+        // The backend checks that a new title isn't already used by this provider,
+        // so an unchanged title must not be sent.
+        if trimmedTitle != original.trimmedTitle {
+            request.title = trimmedTitle
+        }
+        // "" clears the description.
+        if trimmedDescription != original.trimmedDescription {
+            request.description = trimmedDescription
+        }
+        if basePrice != original.basePrice {
+            request.basePrice = basePrice
+        }
+        if priceType != original.priceType {
+            request.priceType = priceType
+        }
+        if isNegotiable != original.isNegotiable {
+            request.isNegotiable = isNegotiable
+        }
+        return request
     }
 }
 
@@ -139,7 +154,7 @@ struct ServiceDraft {
 
 extension ServiceDraft {
     /// A draft filled with a published service, to show or edit it.
-    /// `category` is the `FatumCategory` whose name matches `item.category`, if it's known.
+    /// `category` is the `FatumCategory` whose slug is `item.category`, if it's known.
     init(item: FatumItem, category: FatumCategory?, images: [UIImage]) {
         self.init(
             title: item.title,

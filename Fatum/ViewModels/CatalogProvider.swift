@@ -41,15 +41,20 @@ class CatalogProvider {
 
     /// Mirrors the backend's `UpdateServiceRequest` DTO. There is no category:
     /// it can't change once the service is published.
+    ///
+    /// `nil` fields are left out of the JSON, and the backend keeps their current
+    /// value. Two fields are always applied by the backend, so they must always
+    /// carry the value to keep: `defaultEstimatedTime` (left out means "no time")
+    /// and `fixedQuestions` (empty means "no questions").
     struct UpdateServiceRequest: Encodable {
         let id: String
-        let title: String
-        let description: String
-        let basePrice: Decimal
-        let priceType: PriceType
-        let isNegotiable: Bool
+        var title: String? = nil
+        var description: String? = nil
+        var basePrice: Decimal? = nil
+        var priceType: PriceType? = nil
+        var isNegotiable: Bool? = nil
         let defaultEstimatedTime: Int?
-        var jobType: JobType = .PRESENCIAL
+        var jobType: JobType? = nil
         let fixedQuestions: [FixedQuestion]
     }
 

@@ -31,6 +31,9 @@ struct ServiceReviewScreen: View {
     var mode: Mode = .create
     /// Shown in `.client` mode; the other modes show the signed-in provider.
     var providerName: String? = nil
+    /// Category slug of a published service (`FatumItem.category`), shown in the
+    /// chip in `.edit` and `.client`. In `.create` the chip shows `draft.category`'s name.
+    var categorySlug: String? = nil
     var isSubmitting: Bool = false
     let onBack: () -> Void
     var onPublish: () -> Void = {}
@@ -135,6 +138,9 @@ struct ServiceReviewScreen: View {
                     }
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .overlay(alignment: .top) {
+                    floatingButtons
+                }
 
                 hiringBar {
                     withAnimation {
@@ -223,42 +229,42 @@ struct ServiceReviewScreen: View {
                 .glassEffect(.regular, in: .capsule)
                 .padding(layout.internalPadding)
         }
-        // Back and "Editar fotos" float over the photo, in Liquid Glass like the
-        // navigation bar buttons of the other screens.
-        .overlay(alignment: .top) {
-            HStack {
+    }
+
+    /// Back and "Editar fotos", in Liquid Glass like the navigation bar buttons of
+    /// the other screens. They sit outside the `ScrollView` and the photo
+    /// carousel so their gestures can't swallow the taps, and stay visible while scrolling.
+    private var floatingButtons: some View {
+        HStack {
+            Button {
+                onBack()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .fontWeight(.bold)
+                    .foregroundStyle(.text)
+                    .frame(width: circleButtonSize, height: circleButtonSize)
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel("Volver")
+
+            Spacer()
+
+            if canEdit {
                 Button {
-                    onBack()
+                    editingSection = .photos
                 } label: {
-                    Image(systemName: "chevron.left")
+                    Label("Editar fotos", systemImage: "photo.on.rectangle.angled")
+                        .fatumStyle(.footer)
                         .fontWeight(.bold)
                         .foregroundStyle(.text)
-                        .frame(width: circleButtonSize, height: circleButtonSize)
-                        .glassEffect(.regular.interactive(), in: .circle)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Volver")
-
-                Spacer()
-
-                if canEdit {
-                    Button {
-                        editingSection = .photos
-                    } label: {
-                        Label("Editar fotos", systemImage: "photo.on.rectangle.angled")
-                            .fatumStyle(.footer)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.text)
-                            .padding(.horizontal, layout.internalSpacing)
-                            .padding(.vertical, layout.smallPadding)
-                            .glassEffect(.regular.interactive(), in: .capsule)
-                    }
-                    .buttonStyle(.plain)
-                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.capsule)
             }
-            .disabled(isSubmitting)
-            .padding(layout.internalPadding)
         }
+        .disabled(isSubmitting)
+        .padding(layout.internalPadding)
     }
 
     // MARK: - Title & Provider
@@ -286,8 +292,8 @@ struct ServiceReviewScreen: View {
                 }
             }
 
-            if let category = draft.category {
-                categoryChip(category)
+            if let chipTitle = categoryChipTitle {
+                categoryChip(title: chipTitle, logoUrl: draft.category?.logoUrl)
             }
 
             // Rating | provider | reviews
@@ -340,17 +346,22 @@ struct ServiceReviewScreen: View {
         }
     }
 
-    /// The service's category as a chip with its logo and slug, styled like an unselected `CategoryChipView`.
-    private func categoryChip(_ category: FatumCategory) -> some View {
+    /// The service's category as a chip with its logo, styled like an unselected `CategoryChipView`.
+    /// The category name while creating; the slug from the backend once published.
+    private var categoryChipTitle: String? {
+        mode == .create ? draft.category?.name : categorySlug
+    }
+
+    private func categoryChip(title: String, logoUrl: String?) -> some View {
         HStack(spacing: layout.tiny) {
             CategoryLogoView(
-                logoUrl: category.logoUrl,
+                logoUrl: logoUrl,
                 placeholderIcon: "square.grid.2x2",
                 size: chipLogoSize,
                 tint: .text
             )
 
-            Text(category.slug)
+            Text(title)
                 .fatumStyle(.footer)
                 .fontWeight(.bold)
                 .foregroundStyle(.text)
@@ -362,7 +373,7 @@ struct ServiceReviewScreen: View {
                 .stroke(Color.text, lineWidth: 2)
         )
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Categoría \(category.name)")
+        .accessibilityLabel("Categoría \(title)")
     }
 
     private var providerAvatar: some View {

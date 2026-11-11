@@ -23,6 +23,8 @@ struct ServiceDetailScreen<Route: Hashable>: View {
     /// Root category whose sub-categories are matched against the service's category.
     @State private var catalogProvider = CatalogProvider(root: "Belleza")
     @State private var draft = ServiceDraft()
+    /// The service as it was loaded, so "Guardar cambios" only sends what changed.
+    @State private var originalDraft = ServiceDraft()
     @State private var isLoading = true
     @State private var isSubmitting = false
 
@@ -57,6 +59,7 @@ struct ServiceDetailScreen<Route: Hashable>: View {
                     categories: catalogProvider.categories.filter(\.isAble),
                     mode: mode,
                     providerName: service.providerName,
+                    categorySlug: service.category,
                     isSubmitting: isSubmitting,
                     onBack: { router.pop() },
                     onPublish: save
@@ -92,11 +95,10 @@ struct ServiceDetailScreen<Route: Hashable>: View {
         async let categoriesLoaded: Void = catalogProvider.loadCategories()
         let (downloadedImages, _) = await (images, categoriesLoaded)
 
-        // The service stores the category name; the chip needs the full category (slug and logo).
-        let category = catalogProvider.categories.first {
-            $0.name.caseInsensitiveCompare(service.category) == .orderedSame
-        }
+        // `service.category` is the slug; the full category only adds the chip's logo.
+        let category = catalogProvider.categories.first { $0.slug == service.category }
         draft = ServiceDraft(item: service, category: category, images: downloadedImages)
+        originalDraft = draft
         isLoading = false
     }
 
@@ -110,7 +112,7 @@ struct ServiceDetailScreen<Route: Hashable>: View {
             showMessage("No se encontró el servicio")
             return
         }
-        guard let request = draft.updateRequest(id: id) else {
+        guard let request = draft.updateRequest(id: id, original: originalDraft) else {
             showMessage("Revisa la información del servicio: necesita título y al menos \(ServiceDraft.minPhotos) foto")
             return
         }
