@@ -6,20 +6,24 @@
 import SwiftUI
 
 /// A bordered card for one order. The top part has the service title and the
-/// other person's username on the left, the price and an info button on the
-/// right, and the order's action buttons below; a divider separates the footer
-/// with the booking date, time and estimated time, and the status tag.
-/// Styled like `ServiceCardView`.
+/// other person's username on the left, the price, an info button and, when
+/// they apply, cancel and "see reason" buttons on the right, then the order's
+/// actions; a divider separates the footer with the booking date, time and
+/// estimated time, and the status tag. Styled like `ServiceCardView`.
 struct OrderCardView<Actions: View>: View {
     let order: FatumOrder
     var onInfo: () -> Void
-    /// Buttons shown under the title; use `.fatumButton(variant: .compact)`.
+    /// Shows the cancel button under the info one; `nil` hides it.
+    var onCancel: (() -> Void)? = nil
+    var isCancelEnabled: Bool = true
+    /// Shows the "see reason" button under the cancel one; `nil` hides it.
+    var onShowReason: (() -> Void)? = nil
+    /// The order's actions under the title, full width (e.g. a `SlideToActionView`).
     @ViewBuilder var actions: Actions
 
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private let tagCornerRadius: CGFloat = 12
-    private let dotSize: CGFloat = 8
 
     private var layout: ResponsiveLayout {
         ResponsiveLayout(isCompact: sizeClass == .compact)
@@ -60,17 +64,39 @@ struct OrderCardView<Actions: View>: View {
                         .fatumStyle(.body)
                         .foregroundStyle(.text)
 
-                    Button(action: onInfo) {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(.text)
+                    VStack(spacing: layout.internalSpacing) {
+                        Button(action: onInfo) {
+                            Image(systemName: "info.circle")
+                                .foregroundStyle(.text)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Información de la orden")
+
+                        if let onCancel {
+                            Button(action: onCancel) {
+                                Image(systemName: "nosign")
+                                    .foregroundStyle(.text)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!isCancelEnabled)
+                            .opacity(isCancelEnabled ? 1 : 0.5)
+                            .accessibilityLabel("Cancelar orden")
+                        }
+
+                        if let onShowReason {
+                            Button(action: onShowReason) {
+                                Image(systemName: "text.bubble")
+                                    .foregroundStyle(.text)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Ver razón")
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Información de la orden")
                 }
 
                 // Left out with `EmptyView` so it doesn't add spacing under the title.
                 if Actions.self != EmptyView.self {
-                    HStack(spacing: layout.internalSpacing) {
+                    VStack(alignment: .leading, spacing: layout.internalSpacing) {
                         actions
                     }
                 }
@@ -109,23 +135,15 @@ struct OrderCardView<Actions: View>: View {
         )
     }
 
-    /// Same look as `ServiceStatusTag`: a dot and a tinted background in the status color.
+    /// The same colors for every status, like the category tag of `ServiceCardView`.
     private func statusTag(_ status: OrderStatus) -> some View {
-        HStack(spacing: layout.spacingSmall) {
-            Circle()
-                .fill(status.color)
-                .frame(width: dotSize, height: dotSize)
-                .accessibilityHidden(true)
-
-            Text(status.displayName)
-                .fatumStyle(.footer)
-                .foregroundStyle(.text)
-                .lineLimit(1)
-        }
-        .padding(layout.smallPadding)
-        .background(status.color.opacity(0.18), in: RoundedRectangle(cornerRadius: tagCornerRadius))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Estado \(status.displayName)")
+        Text(status.displayName)
+            .fatumStyle(.footer)
+            .foregroundStyle(.brandPrimary)
+            .lineLimit(1)
+            .padding(layout.smallPadding)
+            .background(.secondaryContainer, in: RoundedRectangle(cornerRadius: tagCornerRadius))
+            .accessibilityLabel("Estado \(status.displayName)")
     }
 }
 
@@ -141,12 +159,10 @@ struct OrderCardView<Actions: View>: View {
                 estimatedTime: 50,
                 status: "PENDING"
             ),
-            onInfo: {}
+            onInfo: {},
+            onCancel: {}
         ) {
-            Button("Aceptar") {}
-                .buttonStyle(.fatumButton(variant: .compact))
-            Button("Rechazar") {}
-                .buttonStyle(.fatumButton(variant: .compact))
+            SlideToActionView(positiveTitle: "Aceptar", negativeTitle: "Rechazar", onPositive: {}, onNegative: {})
         }
 
         OrderCardView(

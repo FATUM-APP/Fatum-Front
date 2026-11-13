@@ -31,11 +31,11 @@ struct HomeView: View {
 /// `Route` is the route type of the stack it lives in: navigation goes through
 /// `Router<Route>` from the environment: `addressesRoute` is pushed for
 /// "Administrar direcciones", `ordersRoute` from the orders icon next to the
-/// address selector, and `serviceRoute` when a service card is tapped.
+/// address selector (with the side to list), and `serviceRoute` when a service card is tapped.
 /// When pushed, `showsBackButton` adds a back button that pops the router.
 struct HomeContentView<Route: Hashable>: View {
     let addressesRoute: Route
-    let ordersRoute: Route
+    let ordersRoute: (ConfirmingParty) -> Route
     let serviceRoute: (FatumItem) -> Route
     var showsBackButton: Bool = false
 
@@ -177,16 +177,37 @@ struct HomeContentView<Route: Hashable>: View {
 
     // MARK: - Header Actions
 
+    private var isProfessional: Bool {
+        userProvider.currentUser?.role == .professional
+    }
+
     /// Orders and notifications icons at the top-right, on the address selector's line.
+    /// Professionals open the orders they provide; holding the icon lets them
+    /// pick the ones they hired instead.
     private var headerActions: some View {
         HStack(spacing: layout.spacingMedium) {
             Button {
-                router.push(ordersRoute)
+                router.push(ordersRoute(isProfessional ? .PROVIDER : .CUSTOMER))
             } label: {
                 Image(systemName: "bubble.left.and.bubble.right")
                     .foregroundStyle(.text)
             }
             .accessibilityLabel("Mis órdenes")
+            .contextMenu {
+                if isProfessional {
+                    Button {
+                        router.push(ordersRoute(.PROVIDER))
+                    } label: {
+                        Label("Como profesional", systemImage: "briefcase")
+                    }
+
+                    Button {
+                        router.push(ordersRoute(.CUSTOMER))
+                    } label: {
+                        Label("Como cliente", systemImage: "bag")
+                    }
+                }
+            }
 
             Button {
                 showMessage("Función en construcción")

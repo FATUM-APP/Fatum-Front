@@ -33,18 +33,25 @@ enum OrderStatus: String, Codable, CaseIterable {
         case .REFUNDED: "Reembolsada"
         }
     }
+}
 
-    /// One color per status for its tag.
-    var color: Color {
-        switch self {
-        case .PENDING: .orange
-        case .ACCEPTED, .DELIVERING: .blue
-        case .COMPLETED, .SOLVED: .green
-        case .REFUNDED: .purple
-        case .REJECTED, .NOT_DELIVERED, .CANCELLED: .red
-        case .DISPUTED: .yellow
-        }
+/// The three steps both parties confirm. Mirrors the `confirmation` of the
+/// `ORDER_CONFIRMATION_CHANGED` event; `path` is the segment of
+/// `/order/confirm/{path}/{orderId}` and `/order/deny/{path}/{orderId}`.
+enum OrderStage: String, Codable {
+    case START
+    case COMPLETION
+    case PAYMENT
+
+    var path: String {
+        rawValue.lowercased()
     }
+}
+
+/// Mirrors the backend's `ConfirmingParty`, sent as `?party=` and in the events.
+enum ConfirmingParty: String, Codable {
+    case CUSTOMER
+    case PROVIDER
 }
 
 /// The three filters of `OrdersScreen`, each grouping several `OrderStatus`es.

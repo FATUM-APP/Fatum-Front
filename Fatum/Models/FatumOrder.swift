@@ -26,8 +26,9 @@ struct FatumOrder: Decodable, Hashable, Identifiable {
     var startConfirmation = DualConfirmation()
     var completionConfirmation = DualConfirmation()
     var paymentConfirmation = DualConfirmation()
-    let reason: String?
-    let status: String
+    /// `var` so realtime events can update the card before the list reloads.
+    var reason: String?
+    var status: String
 
     private enum CodingKeys: String, CodingKey {
         case id, clientUsername, providerUsername, catalogItemTitle, booking
@@ -69,6 +70,54 @@ struct FatumOrder: Decodable, Hashable, Identifiable {
         self.estimatedTime = estimatedTime
         self.reason = reason
         self.status = status
+    }
+
+    /// The card of `detail` as `side` sees it: the other party's username.
+    init(detail: FatumOrderDetail, side: ConfirmingParty) {
+        self.init(
+            id: detail.id,
+            counterpartUsername: side == .PROVIDER ? detail.clientUsername : detail.providerUsername,
+            catalogItemTitle: detail.serviceTitle,
+            booking: detail.booking,
+            negotiatedPrice: detail.negotiatedPrice,
+            estimatedTime: detail.estimatedTime,
+            reason: detail.reason,
+            status: detail.status
+        )
+        startConfirmation = detail.startConfirmation
+        completionConfirmation = detail.completionConfirmation
+        paymentConfirmation = detail.paymentConfirmation
+    }
+
+    // MARK: - Confirmations
+
+    func confirmation(for stage: OrderStage) -> DualConfirmation {
+        switch stage {
+        case .START: startConfirmation
+        case .COMPLETION: completionConfirmation
+        case .PAYMENT: paymentConfirmation
+        }
+    }
+
+    /// `party`'s answer for `stage`: `true` confirmed, `false` denied, `nil` not answered.
+    func answer(of party: ConfirmingParty, for stage: OrderStage) -> Bool? {
+        let confirmation = confirmation(for: stage)
+        return party == .CUSTOMER ? confirmation.byCustomer : confirmation.byProvider
+    }
+
+    /// Sets `party`'s answer for `stage`, as an `ORDER_CONFIRMATION_CHANGED` event reports it.
+    mutating func setAnswer(_ confirmed: Bool, of party: ConfirmingParty, for stage: OrderStage) {
+        var updated = confirmation(for: stage)
+        if party == .CUSTOMER {
+            updated.byCustomer = confirmed
+        } else {
+            updated.byProvider = confirmed
+        }
+        switch stage {
+        case .START: startConfirmation = updated
+        case .COMPLETION: completionConfirmation = updated
+        case .PAYMENT: paymentConfirmation = updated
+        }
     }
 
     // MARK: - Display helpers

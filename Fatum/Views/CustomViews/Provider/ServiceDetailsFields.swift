@@ -81,7 +81,7 @@ struct ServiceDetailsFields: View {
                 Button("Reintentar") {
                     onRetry()
                 }
-                .buttonStyle(.fatumButton(variant: .bordered))
+                .buttonStyle(.fatumButton(variant: .outlined))
             }
         }
         .padding(layout.internalPadding)

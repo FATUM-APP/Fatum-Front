@@ -11,12 +11,15 @@ import SwiftUI
 /// - `.edit`: the provider tapped one of their services in "Mis servicios".
 ///   "Guardar cambios" sends `PUT /catalog/item/update` and goes back, where the list reloads.
 /// - `.client`: a client tapped a service on Home. Nothing can be edited.
-///   "Contratar" sends `POST /order/book` and goes back on success.
+///   "Contratar" sends `POST /order/book` and, on success, replaces this screen
+///   with `ordersRoute` so the client sees the new order.
 ///
 /// `Route` is the route type of the stack that pushed it (`ProviderRoute` or `ProfileRoute`).
 struct ServiceDetailScreen<Route: Hashable>: View {
     let service: FatumItem
     let mode: ServiceReviewScreen.Mode
+    /// Where to go after hiring; without it, the screen just goes back.
+    var ordersRoute: Route? = nil
 
     @Environment(Router<Route>.self) private var router
     @Environment(UserProvider.self) private var userProvider
@@ -166,8 +169,8 @@ struct ServiceDetailScreen<Route: Hashable>: View {
         }
     }
 
-    /// `POST /order/book` with what the client filled in. Goes back on success;
-    /// only errors get a toast.
+    /// `POST /order/book` with what the client filled in. Opens the orders on
+    /// success; only errors get a toast.
     private func hire(_ hireRequest: ServiceReviewScreen.HireRequest) {
         guard let clientId = userProvider.currentUser?.userId, let serviceId = service.id else {
             showMessage("No se pudo contratar el servicio")
@@ -187,7 +190,11 @@ struct ServiceDetailScreen<Route: Hashable>: View {
             isHiring = false
 
             if success {
+                // Replaces this screen, so going back from the orders lands on Home.
                 router.pop()
+                if let ordersRoute {
+                    router.push(ordersRoute)
+                }
             } else {
                 showMessage(orderProvider.error ?? "No se pudo contratar el servicio")
             }

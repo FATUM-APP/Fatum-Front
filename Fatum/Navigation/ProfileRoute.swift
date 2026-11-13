@@ -13,8 +13,9 @@ enum ProfileRoute: Hashable {
     case updateUser(UserFieldType)
     /// A service opened from Home, as clients see it.
     case serviceDetail(FatumItem)
-    /// The user's orders, as a client or as a professional depending on their role.
-    case orders
+    /// The user's orders from one side: `.PROVIDER` the ones they provide,
+    /// `.CUSTOMER` the ones they hired.
+    case orders(ConfirmingParty)
 }
 
 extension View {
@@ -33,10 +34,11 @@ extension View {
                 UpdateUserScreen(fieldType: fieldType)
                     .toolbar(.hidden, for: .tabBar)
             case .serviceDetail(let service):
-                ServiceDetailScreen<ProfileRoute>(service: service, mode: .client)
+                // After hiring, the user lands on the orders they hired.
+                ServiceDetailScreen<ProfileRoute>(service: service, mode: .client, ordersRoute: .orders(.CUSTOMER))
                     .toolbar(.hidden, for: .tabBar)
-            case .orders:
-                OrdersScreen<ProfileRoute>()
+            case .orders(let side):
+                OrdersScreen<ProfileRoute>(side: side)
                     .toolbar(.hidden, for: .tabBar)
             }
         }
