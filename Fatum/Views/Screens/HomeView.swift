@@ -16,6 +16,7 @@ struct HomeView: View {
         NavigationStack(path: $router.path) {
             HomeContentView(
                 addressesRoute: ProfileRoute.addresses,
+                ordersRoute: ProfileRoute.orders,
                 serviceRoute: ProfileRoute.serviceDetail
             )
             .profileDestinations()
@@ -25,14 +26,16 @@ struct HomeView: View {
 }
 
 /// Content of Home without its own `NavigationStack`, so the same screen works
-/// as the root of the Home tab and pushed onto another stack (`ProviderRoute.home`).
+/// as the root of the Home tab and pushed onto another stack.
 ///
 /// `Route` is the route type of the stack it lives in: navigation goes through
 /// `Router<Route>` from the environment: `addressesRoute` is pushed for
-/// "Administrar direcciones" and `serviceRoute` when a service card is tapped.
+/// "Administrar direcciones", `ordersRoute` from the orders icon next to the
+/// address selector, and `serviceRoute` when a service card is tapped.
 /// When pushed, `showsBackButton` adds a back button that pops the router.
 struct HomeContentView<Route: Hashable>: View {
     let addressesRoute: Route
+    let ordersRoute: Route
     let serviceRoute: (FatumItem) -> Route
     var showsBackButton: Bool = false
 
@@ -80,17 +83,22 @@ struct HomeContentView<Route: Hashable>: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: layout.externalSpacing) {
-                    HomeAddressSelector(
-                        addresses: addressProvider.addresses,
-                        principal: addressProvider.principal,
-                        selected: $selectedAddress,
-                        isLoading: addressProvider.isLoading,
-                        errorMessage: addressProvider.loadFailed ? addressProvider.error : nil,
-                        onMakePrincipal: makePrincipal,
-                        onAdd: { showAddAddress = true },
-                        onManage: { router.push(addressesRoute) },
-                        onRetry: { Task { await addressProvider.loadAddresses() } }
-                    )
+                    HStack(alignment: .top, spacing: layout.internalSpacing) {
+                        HomeAddressSelector(
+                            addresses: addressProvider.addresses,
+                            principal: addressProvider.principal,
+                            selected: $selectedAddress,
+                            isLoading: addressProvider.isLoading,
+                            errorMessage: addressProvider.loadFailed ? addressProvider.error : nil,
+                            onMakePrincipal: makePrincipal,
+                            onAdd: { showAddAddress = true },
+                            onManage: { router.push(addressesRoute) },
+                            onRetry: { Task { await addressProvider.loadAddresses() } }
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        headerActions
+                    }
 
                     greetingCard
 
@@ -165,6 +173,30 @@ struct HomeContentView<Route: Hashable>: View {
             }
             .environment(addressProvider)
         }
+    }
+
+    // MARK: - Header Actions
+
+    /// Orders and notifications icons at the top-right, on the address selector's line.
+    private var headerActions: some View {
+        HStack(spacing: layout.spacingMedium) {
+            Button {
+                router.push(ordersRoute)
+            } label: {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .foregroundStyle(.text)
+            }
+            .accessibilityLabel("Mis órdenes")
+
+            Button {
+                showMessage("Función en construcción")
+            } label: {
+                Image(systemName: "bell")
+                    .foregroundStyle(.text)
+            }
+            .accessibilityLabel("Notificaciones")
+        }
+        .padding(.top, layout.tiny)
     }
 
     // MARK: - Greeting
@@ -382,9 +414,7 @@ struct HomeContentView<Route: Hashable>: View {
 
     private func makePrincipal(_ address: FatumAddress) {
         Task {
-            if await addressProvider.makePrincipal(alias: address.identifier) {
-                showMessage("Dirección principal actualizada")
-            } else {
+            if await !addressProvider.makePrincipal(alias: address.identifier) {
                 showMessage(addressProvider.error ?? "Error al actualizar la dirección principal")
             }
         }

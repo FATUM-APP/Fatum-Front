@@ -13,8 +13,9 @@ import SwiftUI
 ///   sheet and "Ofrecer servicio" publishes it.
 /// - `.edit`: the provider opened one of their services from "Mis servicios".
 ///   Same as `.create`, but "Guardar cambios" updates it and the category can't change.
-/// - `.client`: a client opened the service from Home. Nothing is editable and
-///   "Contratar" is not available yet, so it shows a toast.
+/// - `.client`: a client opened the service from Home. Nothing is editable; the
+///   provider's name and photo load from the public user endpoints, and
+///   "Contratar" sends the request through `onHire`.
 ///
 /// In `.create` and `.edit`, "Contratar" is shown as clients will see it but does
 /// nothing: the provider can't hire their own service.
@@ -25,15 +26,36 @@ struct ServiceReviewScreen: View {
         case client
     }
 
+    /// What the client filled in "Personaliza tu solicitud", passed to `onHire`.
+    struct HireRequest {
+        let booking: Date
+        /// Only for negotiable services.
+        let negotiatedPrice: Decimal?
+        let answers: [OrderProvider.QuestionAnswer]
+        let requirements: String?
+    }
+
     @Binding var draft: ServiceDraft
     let rootName: String
     let categories: [FatumCategory]
     var mode: Mode = .create
-    /// Shown in `.client` mode; the other modes show the signed-in provider.
+    /// Shown in `.client` mode until the provider's public profile loads; the
+    /// other modes show the signed-in provider.
     var providerName: String? = nil
+    /// In `.client` mode, used to load the provider's public name and photo.
+    var providerId: String? = nil
+    /// Shows a spinner on "Contratar" while the request is in flight.
+    var isHiring: Bool = false
+    /// Called by "Contratar" in `.client` mode once every question is answered.
+    var onHire: (HireRequest) -> Void = { _ in }
     /// Category slug of a published service (`FatumItem.category`), shown in the
     /// chip in `.edit` and `.client`. In `.create` the chip shows `draft.category`'s name.
     var categorySlug: String? = nil
+    /// Status of a published service, shown next to the category chip in `.edit` only.
+    var status: ServiceStatus? = nil
+    var isUpdatingStatus: Bool = false
+    /// Holding the status tag calls this with `true` to activate and `false` to deactivate.
+    var onToggleActive: ((Bool) -> Void)? = nil
     var isSubmitting: Bool = false
     let onBack: () -> Void
     var onPublish: () -> Void = {}
@@ -54,10 +76,15 @@ struct ServiceReviewScreen: View {
     @State private var questionDraft = FixedQuestionDraft()
     @State private var currentPhotoIndex = 0
     @State private var providerImageURL: String? = nil
+    /// The provider's name from `GET /users/user/{id}` (`.client` mode only).
+    @State private var loadedProviderName: String? = nil
 
     // Hiring preview
     @State private var selectedDate = Date()
     @State private var proposedPrice: Decimal = 0
+    /// Answers keyed by `FixedQuestion.question`.
+    @State private var answers: [String: Set<String>] = [:]
+    @State private var requirements: String = ""
 
     @State private var showToast = false
     @State private var toastMessage: String = ""
@@ -98,7 +125,7 @@ struct ServiceReviewScreen: View {
     }
 
     private var displayedProviderName: String {
-        let name = mode == .client ? providerName : userProvider.currentUser?.name
+        let name = mode == .client ? (loadedProviderName ?? providerName) : userProvider.currentUser?.name
         return name?.capitalized ?? "Profesional"
     }
 
@@ -180,9 +207,14 @@ struct ServiceReviewScreen: View {
             currentPhotoIndex = min(currentPhotoIndex, max(0, draft.images.count - 1))
         }
         .task {
-            // There is no endpoint for another provider's photo yet, so clients see the placeholder.
             if canEdit {
                 providerImageURL = await userProvider.fetchProfileImageURL()
+            } else if let providerId {
+                // The provider's profile by id, not `/me`, so any client can see it.
+                async let profile = userProvider.fetchPublicProfile(userId: providerId)
+                async let imageURL = userProvider.fetchProfileImageURL(userId: providerId)
+                loadedProviderName = await profile?.name
+                providerImageURL = await imageURL
             }
         }
         .sheet(item: $editingSection) { section in
@@ -292,8 +324,20 @@ struct ServiceReviewScreen: View {
                 }
             }
 
-            if let chipTitle = categoryChipTitle {
-                categoryChip(title: chipTitle, logoUrl: draft.category?.logoUrl)
+            HStack(spacing: layout.internalSpacing) {
+                if let chipTitle = categoryChipTitle {
+                    categoryChip(title: chipTitle, logoUrl: draft.category?.logoUrl)
+                }
+
+                if mode == .edit, let status {
+                    // Same content height as the chip's logo, so both line up.
+                    ServiceStatusTag(
+                        status: status,
+                        minHeight: chipLogoSize,
+                        isUpdating: isUpdatingStatus,
+                        onToggleActive: onToggleActive
+                    )
+                }
             }
 
             // Rating | provider | reviews
@@ -546,9 +590,17 @@ struct ServiceReviewScreen: View {
                         .fatumStyle(.footer)
                         .foregroundStyle(.text)
                 } else {
-                    FixedQuestionsCarousel(questions: draft.fixedQuestions)
+                    FixedQuestionsCarousel(questions: draft.fixedQuestions, answers: $answers)
                 }
             }
+
+            LabeledTextEditor(
+                label: "Requerimientos adicionales",
+                placeholder: "Cuéntale al profesional cualquier detalle extra de tu solicitud…",
+                text: $requirements,
+                maxLength: OrderProvider.BookServiceRequest.requirementsMaxLength,
+                isOptional: true
+            )
         }
     }
 
@@ -623,10 +675,18 @@ struct ServiceReviewScreen: View {
                     .disabled(true)
                     .accessibilityHint("Vista previa: los clientes usarán este botón para contratar")
             } else {
-                Button("Contratar") {
-                    showMessage("Función en construcción")
+                Button {
+                    hire()
+                } label: {
+                    if isHiring {
+                        ProgressView()
+                            .tint(.brandPrimary)
+                    } else {
+                        Text("Contratar")
+                    }
                 }
                 .buttonStyle(.fatumButton(variant: .compact))
+                .disabled(isHiring)
             }
         }
         .padding(layout.internalPadding)
@@ -779,6 +839,31 @@ struct ServiceReviewScreen: View {
     private func adjustProposedPrice(by delta: Decimal) {
         guard draft.isNegotiable else { return }
         proposedPrice = max(0, proposedPrice + delta)
+    }
+
+    /// Every fixed question needs an answer; text answers are trimmed first.
+    private func hire() {
+        var questionAnswers: [OrderProvider.QuestionAnswer] = []
+        for question in draft.fixedQuestions {
+            let answer = Set(
+                (answers[question.question] ?? [])
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            )
+            guard !answer.isEmpty else {
+                showMessage("Responde todas las preguntas del servicio para contratarlo")
+                return
+            }
+            questionAnswers.append(.init(question: question.question, answer: answer))
+        }
+
+        let trimmedRequirements = requirements.trimmingCharacters(in: .whitespacesAndNewlines)
+        onHire(HireRequest(
+            booking: selectedDate,
+            negotiatedPrice: draft.isNegotiable ? proposedPrice : nil,
+            answers: questionAnswers,
+            requirements: trimmedRequirements.isEmpty ? nil : trimmedRequirements
+        ))
     }
 
     private func showMessage(_ message: String) {

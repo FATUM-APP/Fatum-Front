@@ -8,8 +8,7 @@ import SwiftUI
 /// Root of the "Mis servicios" tab for professionals. Owns the `Router<ProviderRoute>`
 /// and shares it with every screen pushed in this tab.
 ///
-/// "Contratar" opens Home, "Mis Favoritos" is not available yet, and
-/// "+ Ofrecer Servicio" starts `CreateServiceScreen`. Below them, category chips
+/// "+ Ofrecer Servicio" starts `CreateServiceScreen`. Below it, category chips
 /// filter the provider's own services, shown as `ServiceCardView`s; tapping one
 /// opens it for editing.
 struct MyServicesScreen: View {
@@ -38,25 +37,6 @@ struct MyServicesScreen: View {
         NavigationStack(path: $router.path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: layout.internalSpacing) {
-                    HStack {
-                        Button {
-                            router.push(.home)
-                        } label: {
-                            Label("Contratar", systemImage: "bag")
-                        }
-                        .buttonStyle(.fatumButton(variant: .borderedExpanded))
-
-                        Spacer()
-
-                        Button {
-                            showMessage("Función en construcción")
-                        } label: {
-                            Label("Mis Favoritos", systemImage: "heart")
-                        }
-                        .buttonStyle(.fatumButton(variant: .borderedExpanded))
-                    }
-                    
-
                     Button("+ Ofrecer Servicio") {
                         router.push(.createService)
                     }
@@ -106,9 +86,15 @@ struct MyServicesScreen: View {
 
     private var myServicesSection: some View {
         VStack(alignment: .leading, spacing: layout.spacingMedium) {
-            Text("Mis servicios")
-                .fatumStyle(.subheader)
-                .foregroundStyle(.text)
+            HStack {
+                Text("Mis servicios")
+                    .fatumStyle(.subheader)
+                    .foregroundStyle(.text)
+
+                Spacer()
+
+                statusFilterMenu
+            }
 
             if !availableCategories.isEmpty {
                 ScrollView(.horizontal) {
@@ -126,6 +112,43 @@ struct MyServicesScreen: View {
 
             servicesList
         }
+    }
+
+    /// Shop-style "Filtrar" control in the section header: a menu with a single
+    /// choice of status. When a status is picked, the label shows it and the icon fills.
+    private var statusFilterMenu: some View {
+        let selection = Binding<ServiceStatus?>(
+            get: { catalogProvider.statusFilter },
+            set: { select(catalogProvider.selectedFilter ?? .all, status: $0) }
+        )
+        let isFiltering = catalogProvider.statusFilter != nil
+
+        return Menu {
+            Picker("Estado", selection: selection) {
+                Text("Todos").tag(ServiceStatus?.none)
+                ForEach(ServiceStatus.allCases, id: \.self) { status in
+                    Text(status.filterName).tag(Optional(status))
+                }
+            }
+        } label: {
+            Label(
+                catalogProvider.statusFilter?.filterName ?? "Filtrar",
+                systemImage: isFiltering
+                    ? "line.3.horizontal.decrease.circle.fill"
+                    : "line.3.horizontal.decrease.circle"
+            )
+            .fatumStyle(.footer)
+            .foregroundStyle(isFiltering ? .brandSecondary : .brandPrimary)
+            .padding(layout.smallPadding)
+            .background(
+                Capsule().fill(isFiltering ? Color.brandPrimary : Color.clear)
+            )
+            .overlay(
+                Capsule().stroke(Color.brandPrimary, lineWidth: 1)
+            )
+        }
+        .accessibilityLabel("Filtrar por estado")
+        .accessibilityValue(catalogProvider.statusFilter?.filterName ?? "Todos")
     }
 
     private func chip(for filter: CatalogProvider.ServiceFilter) -> some View {
@@ -154,7 +177,8 @@ struct MyServicesScreen: View {
                     } label: {
                         ServiceCardView(
                             service: service,
-                            imageURL: service.id.flatMap { catalogProvider.coverImageURLs[$0] }
+                            imageURL: service.id.flatMap { catalogProvider.coverImageURLs[$0] },
+                            onSetActive: { active in setActive(active, for: service) }
                         )
                     }
                     .buttonStyle(.plain)
@@ -171,9 +195,7 @@ struct MyServicesScreen: View {
                 .frame(width: 64, height: 64)
                 .foregroundStyle(.brandPrimary.opacity(0.5))
 
-            Text(catalogProvider.selectedFilter == .all
-                 ? "Aún no ofreces servicios"
-                 : "No tienes servicios en esta categoría")
+            Text(emptyStateTitle)
                 .fatumStyle(.subheader)
                 .foregroundStyle(.text)
                 .multilineTextAlignment(.center)
@@ -187,11 +209,35 @@ struct MyServicesScreen: View {
         .padding(.vertical, layout.externalSpacing)
     }
 
+    private var emptyStateTitle: String {
+        if catalogProvider.statusFilter != nil {
+            "No tienes servicios con este estado"
+        } else if catalogProvider.selectedFilter == .all {
+            "Aún no ofreces servicios"
+        } else {
+            "No tienes servicios en esta categoría"
+        }
+    }
+
     // MARK: - Actions
 
+    /// Loads the services of `filter`, keeping the current status filter.
     private func select(_ filter: CatalogProvider.ServiceFilter) {
+        select(filter, status: catalogProvider.statusFilter)
+    }
+
+    private func select(_ filter: CatalogProvider.ServiceFilter, status: ServiceStatus?) {
         guard let providerId else { return }
-        Task { await catalogProvider.selectProviderFilter(filter, providerId: providerId) }
+        Task { await catalogProvider.selectProviderFilter(filter, status: status, providerId: providerId) }
+    }
+
+    private func setActive(_ active: Bool, for service: FatumItem) {
+        Task {
+            // The card's status tag already shows the change; only errors get a toast.
+            if await !catalogProvider.setActive(active, for: service) {
+                showMessage(catalogProvider.error ?? "No se pudo actualizar el servicio")
+            }
+        }
     }
 
     private func showMessage(_ message: String) {

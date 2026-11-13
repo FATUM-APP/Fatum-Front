@@ -11,10 +11,6 @@ import UIKit
 struct ServiceDraft {
     static let minPhotos = 1
     static let maxPhotos = 10
-    /// Uploaded photos are scaled down so their longest side is at most this many pixels.
-    /// The widest place a photo is shown (the carousel on iPad) is about 2000 px, so the
-    /// difference isn't visible, and each file drops from ~3–6 MB to ~0.4–0.8 MB.
-    static let uploadMaxPixelSize: CGFloat = 2048
     static let uploadCompressionQuality: CGFloat = 0.8
 
     var title: String = ""
@@ -85,13 +81,9 @@ struct ServiceDraft {
 
     // MARK: - Request
 
-    /// The JPEG files sent as the `images` part of the request.
-    /// Each photo is scaled down to `uploadMaxPixelSize` first; the originals in `images` are untouched.
+    /// The JPEG files sent as the `images` part of the request, at full resolution.
     var imageData: [Data] {
-        images.compactMap {
-            $0.scaledToFit(maxPixelSize: Self.uploadMaxPixelSize)
-                .jpegData(compressionQuality: Self.uploadCompressionQuality)
-        }
+        images.compactMap { $0.jpegData(compressionQuality: Self.uploadCompressionQuality) }
     }
 
     /// Builds the request body, or `nil` while the draft is incomplete.
@@ -168,30 +160,5 @@ extension ServiceDraft {
             fixedQuestions: item.fixedQuestions ?? [],
             images: images
         )
-    }
-}
-
-// MARK: - Image scaling
-
-private extension UIImage {
-    /// A copy whose longest side is at most `maxPixelSize` pixels, keeping the aspect ratio.
-    /// Images that are already small enough are returned as they are.
-    func scaledToFit(maxPixelSize: CGFloat) -> UIImage {
-        let pixelWidth = size.width * scale
-        let pixelHeight = size.height * scale
-        let longestSide = max(pixelWidth, pixelHeight)
-        guard longestSide > maxPixelSize else { return self }
-
-        let ratio = maxPixelSize / longestSide
-        let targetSize = CGSize(width: (pixelWidth * ratio).rounded(), height: (pixelHeight * ratio).rounded())
-
-        // Scale 1 so `targetSize` is in pixels, not points. Drawing also applies the
-        // photo's orientation, so the result is always upright.
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        return UIGraphicsImageRenderer(size: targetSize, format: format).image { _ in
-            draw(in: CGRect(origin: .zero, size: targetSize))
-        }
     }
 }

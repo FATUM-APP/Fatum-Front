@@ -186,9 +186,7 @@ struct ManageProfileScreen: View {
             )
             isUploadingImage = false
 
-            if success {
-                showMessage("Foto de perfil actualizada")
-            } else {
+            if !success {
                 // Drop the failed image so the previous one shows again
                 selectedImage = nil
                 showMessage(userProvider.error ?? "Error al subir la foto")

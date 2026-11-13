@@ -17,12 +17,9 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
+            // Clients and professionals share the same Home.
             Tab(value: 0) {
-                if isProfessional {
-                    BuildingView(name: "Inicio")
-                } else {
-                    HomeView()
-                }
+                HomeView()
             } label: {
                 Image(systemName: "house")
                 Text("Inicio")

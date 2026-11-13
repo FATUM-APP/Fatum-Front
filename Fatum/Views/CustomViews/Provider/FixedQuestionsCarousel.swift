@@ -10,6 +10,8 @@ import SwiftUI
 /// "Pregunta X de Y" label and page dots show where the client is.
 struct FixedQuestionsCarousel: View {
     let questions: [FixedQuestion]
+    /// Answers keyed by `FixedQuestion.question`; a question without an entry is unanswered.
+    @Binding var answers: [String: Set<String>]
 
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -31,7 +33,13 @@ struct FixedQuestionsCarousel: View {
                 // Not lazy, so every card keeps its answer while swiping and all share the tallest height.
                 HStack(alignment: .top, spacing: layout.internalSpacing) {
                     ForEach(questions) { question in
-                        FixedQuestionAnswerView(question: question)
+                        FixedQuestionAnswerView(
+                            question: question,
+                            answer: Binding(
+                                get: { answers[question.question] ?? [] },
+                                set: { answers[question.question] = $0.isEmpty ? nil : $0 }
+                            )
+                        )
                             .containerRelativeFrame(.horizontal)
                             .id(question.id)
                     }
@@ -73,11 +81,13 @@ struct FixedQuestionsCarousel: View {
 }
 
 #Preview {
+    @Previewable @State var answers: [String: Set<String>] = [:]
+
     FixedQuestionsCarousel(questions: [
         FixedQuestion(question: "¿Tienes alguna alergia?", type: .TEXT),
         FixedQuestion(question: "¿Primera vez?", type: .BOOLEAN),
         FixedQuestion(question: "Largo del cabello", type: .SINGLE_CHOICE, options: ["Corto", "Medio", "Largo"])
-    ])
+    ], answers: $answers)
     .padding(20)
     .background(.brandSecondary)
 }

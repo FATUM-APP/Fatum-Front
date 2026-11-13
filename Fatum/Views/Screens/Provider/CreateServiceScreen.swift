@@ -344,7 +344,7 @@ struct CreateServiceScreen: View {
         isLoading = true
 
         Task {
-            // Scaling and encoding up to 10 photos takes a moment, so it runs after the spinner shows.
+            // Encoding up to 10 photos takes a moment, so it runs after the spinner shows.
             let images = draft.imageData
             guard !images.isEmpty else {
                 isLoading = false

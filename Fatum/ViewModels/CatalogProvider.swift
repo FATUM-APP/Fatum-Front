@@ -60,6 +60,8 @@ class CatalogProvider {
 
     var categories: [FatumCategory] = []
     var selectedFilter: ServiceFilter? = nil
+    /// Status the provider's services are filtered by ("Mis servicios" only); `nil` shows every status.
+    var statusFilter: ServiceStatus? = nil
     var services: [FatumItem] = []
     var isLoadingCategories = false
     /// `true` when the last `loadCategories` request failed; `error` holds the message.
@@ -73,10 +75,11 @@ class CatalogProvider {
     /// Root category whose sub-categories are listed and whose services "Todas" shows.
     let root: String
 
-    private let catalogBaseURL = "https://btx2xtbb3a.execute-api.us-east-1.amazonaws.com/catalog"
-    /// ALB endpoint (plain HTTP, port 80) tried for item creation; allowed by the ATS
-    /// exception in Info.plist. Not in use right now: `createItem` goes through API Gateway.
-    private let catalogUploadBaseURL = "http://fatum-alb-377854245.us-east-1.elb.amazonaws.com/catalog"
+    /// Every service request (categories, services, photos, create and update) goes
+    /// through the ALB, which has no API Gateway body limit. Users and addresses
+    /// stay on API Gateway (`UserProvider`, `AddressProvider`). Requests carry the
+    /// Cognito ID token as `Authorization: Bearer`, like the other providers.
+    private let catalogBaseURL = "https://api.fatumapp.click/catalog"
 
     init(root: String) {
         self.root = root
@@ -134,11 +137,12 @@ class CatalogProvider {
 
     // MARK: - Provider Services
 
-    /// Selects `filter` and loads the services of one provider with
-    /// `GET /catalog/item/provider?providerId=...&category=...`. `.all` leaves out
-    /// `category`, so every service of the provider comes back. Cover photos load afterwards.
-    func selectProviderFilter(_ filter: ServiceFilter, providerId: String) async {
+    /// Selects `filter` and `status` and loads the services of one provider with
+    /// `GET /catalog/item/provider?providerId=...&category=...&status=...`. `.all` leaves out
+    /// `category` and a `nil` status leaves out `status`, so those don't filter. Cover photos load afterwards.
+    func selectProviderFilter(_ filter: ServiceFilter, status: ServiceStatus?, providerId: String) async {
         selectedFilter = filter
+        statusFilter = status
         services = []
         isLoadingServices = true
 
@@ -146,15 +150,52 @@ class CatalogProvider {
         if case .category(let category) = filter {
             queryItems.append(URLQueryItem(name: "category", value: category.name))
         }
+        if let status {
+            queryItems.append(URLQueryItem(name: "status", value: status.rawValue))
+        }
 
         let fetched = await fetchList(FatumItem.self, path: "/item/provider", queryItems: queryItems) ?? []
 
         // Ignore a late response if the user picked another filter meanwhile.
-        guard selectedFilter == filter else { return }
+        guard selectedFilter == filter, statusFilter == status else { return }
         services = fetched
         isLoadingServices = false
 
         await loadCoverImages(for: fetched)
+    }
+
+    /// `PUT /catalog/item/activate` or `/catalog/item/deactivate` with `{ "id": ... }`.
+    /// On success the service's status is updated in `services`, or the service is
+    /// removed when it no longer matches `statusFilter`. On failure `error` is set.
+    func setActive(_ active: Bool, for item: FatumItem) async -> Bool {
+        guard let id = item.id else { return false }
+        let path = active ? "/item/activate" : "/item/deactivate"
+        error = nil
+        do {
+            var request = try await authorizedRequest(path: path, queryItems: [], method: "PUT")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(["id": id])
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200...299).contains(statusCode) else {
+                Self.logErrorResponse("PUT", "/catalog\(path)", statusCode: statusCode, data: data)
+                self.error = Self.parseErrorMessage(from: data) ?? "Error del servidor (\(statusCode))"
+                return false
+            }
+        } catch {
+            print("DEBUG PUT /catalog\(path) error: \(error)")
+            self.error = error.localizedDescription
+            return false
+        }
+
+        let newStatus: ServiceStatus = active ? .ACTIVE : .INACTIVE
+        if let statusFilter, statusFilter != newStatus {
+            services.removeAll { $0.id == id }
+        } else if let index = services.firstIndex(where: { $0.id == id }) {
+            services[index].status = newStatus.rawValue
+        }
+        return true
     }
 
     /// Fetches the photos of every service that has no cover yet, in parallel,
@@ -342,14 +383,14 @@ class CatalogProvider {
         return tokens.idToken
     }
 
-    /// Builds a GET request for `path` under the catalog API with the Cognito token attached.
+    /// Builds a request (GET by default) for `path` under the catalog API with the Cognito token attached.
     /// `queryItems` are percent-encoded by `URLComponents` (e.g. accented category names).
-    private func authorizedRequest(path: String, queryItems: [URLQueryItem]) async throws -> URLRequest {
+    private func authorizedRequest(path: String, queryItems: [URLQueryItem], method: String = "GET") async throws -> URLRequest {
         let idToken = try await fetchIdToken()
         var components = URLComponents(string: "\(catalogBaseURL)\(path)")!
-        components.queryItems = queryItems
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
         var request = URLRequest(url: components.url!)
-        request.httpMethod = "GET"
+        request.httpMethod = method
         request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
         return request
     }

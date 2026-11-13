@@ -300,6 +300,62 @@ class UserProvider {
         }
     }
 
+    // MARK: - Public Profile
+
+    /// The parts of another user's `UserResponse` shown to clients (e.g. a service's provider).
+    struct PublicProfile: Decodable {
+        let name: String
+        let username: String
+    }
+
+    /// `GET /users/user/{userId}`, for anyone's profile, not only the signed-in user's.
+    /// Returns `nil` on failure without touching `error`; the caller keeps its fallback.
+    func fetchPublicProfile(userId: String) async -> PublicProfile? {
+        let path = "/users/user/\(userId)"
+        do {
+            let (data, response) = try await URLSession.shared.data(for: authorizedGetRequest(path: path))
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard statusCode == 200 else {
+                Self.logErrorResponse("GET", path, statusCode: statusCode, data: data)
+                return nil
+            }
+            return try JSONDecoder().decode(PublicProfile.self, from: data)
+        } catch {
+            print("DEBUG GET \(path) error: \(error)")
+            return nil
+        }
+    }
+
+    /// `GET /profile-image/user/{userId}`. Returns the download URL, or `nil`
+    /// when the user has no photo or the request fails.
+    func fetchProfileImageURL(userId: String) async -> String? {
+        let path = "/profile-image/user/\(userId)"
+        do {
+            let (data, response) = try await URLSession.shared.data(for: authorizedGetRequest(path: path))
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard statusCode == 200 else {
+                Self.logErrorResponse("GET", path, statusCode: statusCode, data: data)
+                return nil
+            }
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            return json?["downloadUrl"] as? String
+        } catch {
+            print("DEBUG GET \(path) error: \(error)")
+            return nil
+        }
+    }
+
+    /// GET for `path` with the Cognito token. These routes are meant to be public,
+    /// but the backend still answers 401 without it.
+    /// TODO: drop the token once `/users/user/**` and `/profile-image/user/**` are public.
+    private func authorizedGetRequest(path: String) async throws -> URLRequest {
+        let idToken = try await fetchIdToken()
+        var request = URLRequest(url: URL(string: "\(userBaseURL)\(path)")!)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        return request
+    }
+
     /// Uploads a profile image as multipart/form-data.
     /// Backend expects: PUT /profile-image/update with @RequestParam("image") MultipartFile
     func uploadProfileImage(imageData: Data, fileName: String, contentType: String) async -> Bool {

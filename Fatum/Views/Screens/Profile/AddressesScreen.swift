@@ -12,7 +12,7 @@ import SwiftUI
 /// owns and shares with `AddAddressScreen` through the environment.
 ///
 /// `Route` is the route type of the stack that pushed it (`ProfileRoute` from the
-/// Profile and Home tabs, `ProviderRoute` from Home inside "Mis servicios").
+/// Profile and Home tabs).
 struct AddressesScreen<Route: Hashable>: View {
     @Environment(Router<Route>.self) private var router
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -237,9 +237,7 @@ struct AddressesScreen<Route: Hashable>: View {
 
     private func makePrincipal(_ address: FatumAddress) {
         Task {
-            if await addressProvider.makePrincipal(alias: address.identifier) {
-                showMessage("Dirección principal actualizada")
-            } else {
+            if await !addressProvider.makePrincipal(alias: address.identifier) {
                 showMessage(addressProvider.error ?? "Error al actualizar la dirección principal")
             }
         }
@@ -252,9 +250,7 @@ struct AddressesScreen<Route: Hashable>: View {
 
     private func confirmDelete(_ address: FatumAddress) {
         Task {
-            if await addressProvider.deleteAddress(alias: address.identifier) {
-                showMessage("Dirección eliminada")
-            } else {
+            if await !addressProvider.deleteAddress(alias: address.identifier) {
                 showMessage(addressProvider.error ?? "Error al eliminar la dirección")
             }
         }
