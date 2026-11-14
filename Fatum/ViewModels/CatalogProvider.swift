@@ -199,8 +199,9 @@ class CatalogProvider {
     }
 
     /// Fetches the photos of every service that has no cover yet, in parallel,
-    /// and keeps the first one of each in `coverImageURLs`.
-    private func loadCoverImages(for items: [FatumItem]) async {
+    /// and keeps the first one of each in `coverImageURLs`. Also used by
+    /// "Favoritos", whose services come from `FavoritesProvider`.
+    func loadCoverImages(for items: [FatumItem]) async {
         let ids = items.compactMap(\.id).filter { coverImageURLs[$0] == nil }
         await withTaskGroup(of: (String, String?).self) { group in
             for id in ids {

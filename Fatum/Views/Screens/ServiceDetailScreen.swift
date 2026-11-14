@@ -23,6 +23,7 @@ struct ServiceDetailScreen<Route: Hashable>: View {
 
     @Environment(Router<Route>.self) private var router
     @Environment(UserProvider.self) private var userProvider
+    @Environment(FavoritesProvider.self) private var favoritesProvider
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     /// Root category whose sub-categories are matched against the service's category.
@@ -78,6 +79,8 @@ struct ServiceDetailScreen<Route: Hashable>: View {
                     isUpdatingStatus: isUpdatingStatus,
                     onToggleActive: setActive,
                     isSubmitting: isSubmitting,
+                    isFavorite: favoritesProvider.isFavorite(service),
+                    onToggleFavorite: mode == .client ? toggleFavorite : nil,
                     onBack: { router.pop() },
                     onPublish: save
                 )
@@ -134,6 +137,20 @@ struct ServiceDetailScreen<Route: Hashable>: View {
                 status = active ? .ACTIVE : .INACTIVE
             } else {
                 showMessage(catalogProvider.error ?? "No se pudo actualizar el servicio")
+            }
+        }
+    }
+
+    /// The heart changes right away; only errors get a toast (and undo it).
+    private func toggleFavorite() {
+        guard let clientId = userProvider.currentUser?.userId else { return }
+        let isFavorite = favoritesProvider.isFavorite(service)
+        Task {
+            let success = isFavorite
+                ? await favoritesProvider.remove(service, clientId: clientId)
+                : await favoritesProvider.add(service, clientId: clientId)
+            if !success {
+                showMessage(favoritesProvider.error ?? "No se pudo actualizar tus favoritos")
             }
         }
     }
@@ -248,4 +265,5 @@ struct ServiceDetailScreen<Route: Hashable>: View {
     }
     .environment(Router<ProviderRoute>())
     .environment(UserProvider())
+    .environment(FavoritesProvider())
 }

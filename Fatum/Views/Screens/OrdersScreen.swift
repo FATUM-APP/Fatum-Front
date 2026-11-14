@@ -16,7 +16,7 @@ import SwiftUI
 /// cancel button come from its status and both parties' confirmations
 /// (`slider(for:)` and `canCancel(_:)`).
 ///
-/// `Route` is the route type of the stack that pushed it (`ProfileRoute` from Home).
+/// `Route` is the route type of the stack that pushed it (`ProfileRoute` from Home and Profile).
 struct OrdersScreen<Route: Hashable>: View {
     let side: ConfirmingParty
 

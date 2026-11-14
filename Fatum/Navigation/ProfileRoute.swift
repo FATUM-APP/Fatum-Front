@@ -16,30 +16,29 @@ enum ProfileRoute: Hashable {
     /// The user's orders from one side: `.PROVIDER` the ones they provide,
     /// `.CUSTOMER` the ones they hired.
     case orders(ConfirmingParty)
+    /// "Servicios favoritos" from Profile. Clients have it as a tab instead.
+    case favorites
 }
 
 extension View {
-    /// Registers every `ProfileRoute` destination. Apply once to the root of each
-    /// `NavigationStack` that uses `Router<ProfileRoute>` (`ProfileScreen`, `HomeView`).
+    /// Registers every `ProfileRoute` destination. Applied once in `MainTabView`,
+    /// whose stack wraps the tab bar, so these screens cover it without hiding it.
     func profileDestinations() -> some View {
         navigationDestination(for: ProfileRoute.self) { route in
             switch route {
             case .manageProfile:
                 ManageProfileScreen()
-                    .toolbar(.hidden, for: .tabBar)
             case .addresses:
                 AddressesScreen<ProfileRoute>()
-                    .toolbar(.hidden, for: .tabBar)
             case .updateUser(let fieldType):
                 UpdateUserScreen(fieldType: fieldType)
-                    .toolbar(.hidden, for: .tabBar)
             case .serviceDetail(let service):
                 // After hiring, the user lands on the orders they hired.
                 ServiceDetailScreen<ProfileRoute>(service: service, mode: .client, ordersRoute: .orders(.CUSTOMER))
-                    .toolbar(.hidden, for: .tabBar)
             case .orders(let side):
                 OrdersScreen<ProfileRoute>(side: side)
-                    .toolbar(.hidden, for: .tabBar)
+            case .favorites:
+                FavoritesScreen(showsBackButton: true)
             }
         }
     }

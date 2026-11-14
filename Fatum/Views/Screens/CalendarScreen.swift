@@ -13,6 +13,9 @@ import SwiftUI
 /// orders slide in below on a `DayScheduleView`; tapping one opens
 /// `OrderDetailSheet`. Each month loads when shown.
 ///
+/// While it's open it listens to `/realtime/calendar`, so new orders, status
+/// changes and schedule or unavailability changes show up without pulling to refresh.
+///
 /// With `side`, a `CalendarSideMenu` at the top left switches to `ClientCalendarScreen`.
 struct CalendarScreen: View {
     var side: Binding<ConfirmingParty>? = nil
@@ -103,6 +106,15 @@ struct CalendarScreen: View {
         .task(id: monthKey) {
             await loadMonth()
         }
+        // Cancelled when the screen goes away, which closes the stream.
+        .task(id: userProvider.currentUser?.userId) {
+            guard let providerId = userProvider.currentUser?.userId else { return }
+            await calendarProvider.listenForEvents(providerId: providerId)
+        }
+        // A realtime reload diffs this day's orders to highlight the new ones.
+        .onChange(of: selectedDate, initial: true) {
+            calendarProvider.visibleDay = selectedDate
+        }
         .sheet(item: $slotToShow) { slot in
             OrderDetailSheet(orderId: slot.orderId, initialDetail: calendarProvider.details[slot.orderId])
         }
@@ -143,6 +155,13 @@ struct CalendarScreen: View {
                             title: calendarProvider.serviceTitle(of: slot),
                             isLoadingTitle: calendarProvider.loadingDetailIds.contains(slot.orderId)
                         )
+                        // Orders that just arrived through `/realtime/calendar`.
+                        .overlay {
+                            if calendarProvider.highlightedOrderIds.contains(slot.orderId) {
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.fatumAccent, lineWidth: 2)
+                            }
+                        }
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Ver detalle de la orden")

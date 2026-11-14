@@ -5,16 +5,16 @@
 
 import SwiftUI
 
-/// Root of the "Mis servicios" tab for professionals. Owns the `Router<ProviderRoute>`
-/// and shares it with every screen pushed in this tab.
+/// Root of the "Mis servicios" tab for professionals. Pushes onto `MainTabView`'s
+/// stack through `Router<ProviderRoute>`.
 ///
 /// "+ Ofrecer Servicio" starts `CreateServiceScreen`. Below it, category chips
 /// filter the provider's own services, shown as `ServiceCardView`s; tapping one
 /// opens it for editing.
 struct MyServicesScreen: View {
     @Environment(UserProvider.self) private var userProvider
+    @Environment(Router<ProviderRoute>.self) private var router
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @State private var router = Router<ProviderRoute>()
     /// Root category whose sub-categories are the chips.
     @State private var catalogProvider = CatalogProvider(root: "Belleza")
     @State private var showToast = false
@@ -34,52 +34,48 @@ struct MyServicesScreen: View {
     }
 
     var body: some View {
-        NavigationStack(path: $router.path) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: layout.internalSpacing) {
-                    Button("+ Ofrecer Servicio") {
-                        router.push(.createService)
-                    }
-                    .buttonStyle(.fatumButton(variant: .third))
-
-                    myServicesSection
-                        .padding(.top, layout.spacingMedium)
+        ScrollView {
+            VStack(alignment: .leading, spacing: layout.internalSpacing) {
+                Button("+ Ofrecer Servicio") {
+                    router.push(.createService)
                 }
-                .screenPadding()
+                .buttonStyle(.fatumButton(variant: .third))
+
+                myServicesSection
+                    .padding(.top, layout.spacingMedium)
             }
-            .background(.brandSecondary)
-            .overlay(alignment: .bottom) {
-                if showToast {
-                    ToastMessageView(message: toastMessage)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .onAppear {
-                            Task {
-                                try? await Task.sleep(for: .seconds(3))
-                                withAnimation {
-                                    showToast = false
-                                }
+            .screenPadding()
+        }
+        .background(.brandSecondary)
+        .overlay(alignment: .bottom) {
+            if showToast {
+                ToastMessageView(message: toastMessage)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .onAppear {
+                        Task {
+                            try? await Task.sleep(for: .seconds(3))
+                            withAnimation {
+                                showToast = false
                             }
                         }
-                }
+                    }
             }
-            .animation(.easeInOut, value: showToast)
-            .task {
-                if catalogProvider.categories.isEmpty {
-                    await catalogProvider.loadCategories()
-                }
-                if catalogProvider.selectedFilter == nil {
-                    select(.all)
-                }
-            }
-            // Back on this screen (e.g. after creating a service): refresh the list.
-            .onChange(of: router.path.count) { _, count in
-                if count == 0, let filter = catalogProvider.selectedFilter {
-                    select(filter)
-                }
-            }
-            .providerDestinations()
         }
-        .environment(router)
+        .animation(.easeInOut, value: showToast)
+        .task {
+            if catalogProvider.categories.isEmpty {
+                await catalogProvider.loadCategories()
+            }
+            if catalogProvider.selectedFilter == nil {
+                select(.all)
+            }
+        }
+        // Back on the tabs (e.g. after creating a service): refresh the list.
+        .onChange(of: router.path.count) { _, count in
+            if count == 0, let filter = catalogProvider.selectedFilter {
+                select(filter)
+            }
+        }
     }
 
     // MARK: - My Services
@@ -249,6 +245,10 @@ struct MyServicesScreen: View {
 }
 
 #Preview {
-    MyServicesScreen()
-        .environment(UserProvider())
+    NavigationStack {
+        MyServicesScreen()
+            .providerDestinations()
+    }
+    .environment(Router<ProviderRoute>())
+    .environment(UserProvider())
 }

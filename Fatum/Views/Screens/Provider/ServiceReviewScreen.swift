@@ -60,6 +60,10 @@ struct ServiceReviewScreen: View {
     /// Holding the status tag calls this with `true` to activate and `false` to deactivate.
     var onToggleActive: ((Bool) -> Void)? = nil
     var isSubmitting: Bool = false
+    /// `.client` mode only: fills the heart at the top right of the photos.
+    var isFavorite: Bool = false
+    /// `.client` mode only: the heart adds or removes the service from favorites. Without it there's no heart.
+    var onToggleFavorite: (() -> Void)? = nil
     let onBack: () -> Void
     var onPublish: () -> Void = {}
 
@@ -325,6 +329,18 @@ struct ServiceReviewScreen: View {
                 }
                 .buttonStyle(.glass)
                 .buttonBorderShape(.capsule)
+            } else if let onToggleFavorite {
+                Button(action: onToggleFavorite) {
+                    Image(systemName: isFavorite ? "heart.fill" : "heart")
+                        .fontWeight(.bold)
+                        .foregroundStyle(isFavorite ? .fatumAccent : .text)
+                        .contentTransition(.symbolEffect(.replace))
+                        .frame(width: circleButtonSize, height: circleButtonSize)
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .sensoryFeedback(.selection, trigger: isFavorite)
+                .accessibilityLabel(isFavorite ? "Quitar de favoritos" : "Agregar a favoritos")
             }
         }
         .disabled(isSubmitting)

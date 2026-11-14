@@ -7,21 +7,15 @@
 
 import SwiftUI
 
-/// Root of the Home tab for non-professional users. Owns its own `NavigationStack`.
+/// Root of the Home tab. Pushes onto `MainTabView`'s stack through `Router<ProfileRoute>`,
+/// so "Administrar direcciones" opens the same `AddressesScreen` as Profile.
 struct HomeView: View {
-    /// Home reuses `ProfileRoute` so "Administrar direcciones" can push the same `AddressesScreen`.
-    @State private var router = Router<ProfileRoute>()
-
     var body: some View {
-        NavigationStack(path: $router.path) {
-            HomeContentView(
-                addressesRoute: ProfileRoute.addresses,
-                ordersRoute: ProfileRoute.orders,
-                serviceRoute: ProfileRoute.serviceDetail
-            )
-            .profileDestinations()
-        }
-        .environment(router)
+        HomeContentView(
+            addressesRoute: ProfileRoute.addresses,
+            ordersRoute: ProfileRoute.orders,
+            serviceRoute: ProfileRoute.serviceDetail
+        )
     }
 }
 
@@ -41,6 +35,7 @@ struct HomeContentView<Route: Hashable>: View {
 
     @Environment(Router<Route>.self) private var router
     @Environment(UserProvider.self) private var userProvider
+    @Environment(FavoritesProvider.self) private var favoritesProvider
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     /// Root category whose sub-categories are listed and whose services "Todas" shows.
@@ -109,6 +104,7 @@ struct HomeContentView<Route: Hashable>: View {
                 .screenPadding()
             }
             .scrollDismissesKeyboard(.interactively)
+            .favoriteSwipeContainer()
         }
         .overlay(alignment: .bottom) {
             if showToast {
@@ -356,15 +352,23 @@ struct HomeContentView<Route: Hashable>: View {
         } else {
             VStack(spacing: layout.internalSpacing) {
                 ForEach(visibleServices, id: \.self) { service in
-                    Button {
+                    let isFavorite = favoritesProvider.isFavorite(service)
+                    // A tap gesture, not a `Button`: a cancelled swipe would leave a button dimmed.
+                    ServiceCardView(
+                        service: service,
+                        imageURL: service.id.flatMap { catalogProvider.coverImageURLs[$0] },
+                        isFavorite: isFavorite
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
                         router.push(serviceRoute(service))
-                    } label: {
-                        ServiceCardView(
-                            service: service,
-                            imageURL: service.id.flatMap { catalogProvider.coverImageURLs[$0] }
-                        )
                     }
-                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(.isButton)
+                    .favoriteSwipeActions(
+                        isFavorite: isFavorite,
+                        onAdd: { setFavorite(true, for: service) },
+                        onRemove: { setFavorite(false, for: service) }
+                    )
                 }
             }
         }
@@ -404,6 +408,19 @@ struct HomeContentView<Route: Hashable>: View {
 
     private func select(_ filter: CatalogProvider.ServiceFilter) {
         Task { await catalogProvider.selectFilter(filter) }
+    }
+
+    /// The card's heart changes right away; only errors get a toast (and undo it).
+    private func setFavorite(_ favorite: Bool, for service: FatumItem) {
+        guard let clientId = userProvider.currentUser?.userId else { return }
+        Task {
+            let success = favorite
+                ? await favoritesProvider.add(service, clientId: clientId)
+                : await favoritesProvider.remove(service, clientId: clientId)
+            if !success {
+                showMessage(favoritesProvider.error ?? "No se pudo actualizar tus favoritos")
+            }
+        }
     }
 
     /// `UserDefaults` key for the address picked on Home. Scoped by user so two
@@ -454,7 +471,11 @@ struct HomeContentView<Route: Hashable>: View {
 }
 
 #Preview {
-    let provider = UserProvider()
-    HomeView()
-        .environment(provider)
+    NavigationStack {
+        HomeView()
+            .profileDestinations()
+    }
+    .environment(Router<ProfileRoute>())
+    .environment(UserProvider())
+    .environment(FavoritesProvider())
 }

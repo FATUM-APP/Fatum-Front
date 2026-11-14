@@ -20,6 +20,8 @@ struct ServiceCardView: View {
     var rating: Double = 5
     /// Called with `true` to activate and `false` to deactivate the service.
     var onSetActive: ((Bool) -> Void)? = nil
+    /// Shows a filled heart at the top right (clients only; the provider's own cards have the menu there).
+    var isFavorite: Bool = false
 
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -85,10 +87,18 @@ struct ServiceCardView: View {
                 if onSetActive != nil {
                     actionsMenu
                         .frame(maxHeight: .infinity, alignment: .top)
+                } else if isFavorite {
+                    Image(systemName: "heart.fill")
+                        .foregroundStyle(.fatumAccent)
+                        .padding(layout.smallPadding)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .transition(.scale.combined(with: .opacity))
+                        .accessibilityLabel("Favorito")
                 }
             }
             // As tall as the photo (or the text, if longer), so the menu sits at the top.
             .fixedSize(horizontal: false, vertical: true)
+            .animation(.spring, value: isFavorite)
 
             // Tags span the whole card width, below the photo and the information.
             FlowLayout(spacing: layout.tiny) {
@@ -100,6 +110,8 @@ struct ServiceCardView: View {
             }
         }
         .padding(layout.internalPadding)
+        // Opaque, so swipe actions don't show through the card while it slides.
+        .background(.brandSecondary)
         .clipShape(RoundedRectangle(cornerRadius: FatumFieldStyle.cornerRadius))
         .overlay(
             RoundedRectangle(cornerRadius: FatumFieldStyle.cornerRadius)
