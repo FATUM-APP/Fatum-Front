@@ -380,7 +380,7 @@ struct RegisterView: View {
                 router.push(.confirmEmail(email: email, password: password))
             case .completed:
                 // No code needed: sign in so FatumApp swaps the root to MainTabView.
-                let signedIn = await userProvider.signIn(email: email, password: password)
+                let signedIn = await userProvider.signIn(email: email, password: password, isNewAccount: true)
                 isLoading = false
                 if !signedIn {
                     errorMessage = userProvider.error ?? "Error al iniciar sesión"

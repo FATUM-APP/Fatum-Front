@@ -33,6 +33,10 @@ struct OrdersScreen<Route: Hashable>: View {
     @State private var reasonToShow: FatumOrder? = nil
     /// The order shown in `OrderDetailSheet` from its info button.
     @State private var orderToShow: FatumOrder? = nil
+    /// The completed order being rated in `OrderRatingSheet`.
+    @State private var ratingRequest: RatingRequest? = nil
+    /// Orders already offered for rating, so each one opens the sheet only once.
+    @State private var promptedRatingOrderIds: Set<String> = []
     @State private var showToast = false
     @State private var toastMessage: String = ""
 
@@ -63,6 +67,15 @@ struct OrdersScreen<Route: Hashable>: View {
         let action: OrderAction
         let title: String
         let options: [String]
+    }
+
+    /// A completed order waiting to be rated in `OrderRatingSheet`.
+    private struct RatingRequest: Identifiable {
+        let orderId: String
+        let raterId: String
+        let subjects: [OrderRatingSheet.Subject]
+
+        var id: String { orderId }
     }
 
     private var layout: ResponsiveLayout {
@@ -165,6 +178,13 @@ struct OrdersScreen<Route: Hashable>: View {
             if let orderId = order.id {
                 OrderDetailSheet(orderId: orderId)
             }
+        }
+        .sheet(item: $ratingRequest) { request in
+            OrderRatingSheet(orderId: request.orderId, raterId: request.raterId, subjects: request.subjects)
+        }
+        // Covers both the user's own payment confirmation and the other party's, through the stream.
+        .onChange(of: orderProvider.orders) { oldOrders, newOrders in
+            promptRatingIfCompleted(old: oldOrders, new: newOrders)
         }
     }
 
@@ -461,6 +481,51 @@ struct OrdersScreen<Route: Hashable>: View {
     private func loadOrders() async {
         guard let user = userProvider.currentUser else { return }
         await orderProvider.loadOrders(userId: user.userId, side: side)
+    }
+
+    // MARK: - Rating
+
+    /// Opens `OrderRatingSheet` when an order turns COMPLETED and the user had
+    /// confirmed its payment. Not on the confirmation itself: the backend only
+    /// accepts ratings (404 otherwise) once both parties confirmed the payment.
+    private func promptRatingIfCompleted(old oldOrders: [FatumOrder], new newOrders: [FatumOrder]) {
+        guard ratingRequest == nil, let raterId = userProvider.currentUser?.userId else { return }
+
+        let justCompleted = newOrders.first { order in
+            guard let orderId = order.id,
+                  !promptedRatingOrderIds.contains(orderId),
+                  order.orderStatus == .COMPLETED,
+                  order.answer(of: side, for: .PAYMENT) == true,
+                  let previous = oldOrders.first(where: { $0.id == orderId }) else { return false }
+            return previous.orderStatus != .COMPLETED
+        }
+        guard let orderId = justCompleted?.id else { return }
+        promptedRatingOrderIds.insert(orderId)
+
+        // The list doesn't carry the parties' ids, so they come from the order's detail.
+        Task {
+            do {
+                let detail = try await orderProvider.fetchDetail(id: orderId)
+                ratingRequest = RatingRequest(orderId: orderId, raterId: raterId, subjects: ratingSubjects(for: detail))
+            } catch {
+                print("DEBUG rating detail \(orderId) error: \(error)")
+                showMessage("No se pudo cargar la orden para calificarla")
+            }
+        }
+    }
+
+    /// Providers rate the client; clients rate the professional and the service.
+    private func ratingSubjects(for detail: FatumOrderDetail) -> [OrderRatingSheet.Subject] {
+        if isProvider {
+            return [.init(target: .CLIENT, targetId: detail.clientId, name: detail.clientName.capitalized)]
+        }
+        var subjects: [OrderRatingSheet.Subject] = [
+            .init(target: .PROFESSIONAL, targetId: detail.providerId, name: detail.providerName.capitalized)
+        ]
+        if let serviceId = detail.catalogItemId {
+            subjects.append(.init(target: .SERVICE, targetId: serviceId, name: detail.serviceTitle))
+        }
+        return subjects
     }
 
     private func showInfo(for order: FatumOrder) {

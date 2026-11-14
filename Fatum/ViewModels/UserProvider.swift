@@ -19,7 +19,12 @@ class UserProvider {
     }
 
     /// Signs in with Cognito and loads the user profile.
-    func signIn(email: String, password: String) async -> Bool {
+    ///
+    /// `isNewAccount` is for the first sign-in right after confirming the
+    /// sign-up: the backend finishes setting up the account on that first
+    /// `/users/me`, after the token was issued, so the token is refreshed before
+    /// `currentUser` is set (which opens Home and starts its requests).
+    func signIn(email: String, password: String, isNewAccount: Bool = false) async -> Bool {
         error = nil
         do {
             // Clear any stale session before signing in
@@ -30,7 +35,21 @@ class UserProvider {
                 password: password
             )
             guard result.isSignedIn else { return false }
-            await loadCurrentUser()
+            if isNewAccount {
+                let user = try await fetchCurrentUser()
+                // A failed refresh only means the old token stays, like before.
+                try? await refreshTokens()
+                #if DEBUG
+                await logTokenClaims("new account")
+                #endif
+                currentUser = user
+                isCheckingSession = false
+            } else {
+                await loadCurrentUser()
+                #if DEBUG
+                await logTokenClaims("sign in")
+                #endif
+            }
             return isLoggedIn
         } catch let authError as AuthError {
             error = authError.errorDescription
@@ -143,29 +162,60 @@ class UserProvider {
         return tokens.idToken
     }
 
+    /// Asks Cognito for new tokens, so claims the backend changed after sign-in
+    /// (e.g. the role after `/users/upgrade`) reach every service. Without it the
+    /// old token stays until the user signs in again.
+    private func refreshTokens() async throws {
+        _ = try await Amplify.Auth.fetchAuthSession(options: .forceRefresh())
+    }
+
+    #if DEBUG
+    /// Temporary: prints the ID token's claims (never the token itself) to find
+    /// which one the catalog/score services reject with an empty 403 for new users.
+    /// Personal claims only show their name.
+    private func logTokenClaims(_ label: String) async {
+        guard let token = try? await fetchIdToken() else { return }
+        let parts = token.split(separator: ".")
+        guard parts.count > 1 else { return }
+        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
+        guard let data = Data(base64Encoded: payload),
+              let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+
+        let shownClaims: Set<String> = ["cognito:groups", "custom:role", "custom:userRole", "token_use", "iat", "auth_time", "exp", "aud", "iss"]
+        let summary = claims.keys.sorted().map { key in
+            shownClaims.contains(key) ? "\(key)=\(claims[key] ?? "")" : key
+        }
+        print("DEBUG token claims (\(label)): \(summary.joined(separator: ", "))")
+    }
+    #endif
+
+    /// `GET /users/me`, without touching `currentUser`.
+    private func fetchCurrentUser() async throws -> FatumUser {
+        let idToken = try await fetchIdToken()
+
+        var request = URLRequest(url: URL(string: "\(userBaseURL)/users/me")!)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+        guard statusCode == 200 else {
+            Self.logErrorResponse("GET", "/users/me", statusCode: statusCode, data: data)
+            throw URLError(.badServerResponse)
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .formatted(Self.localDateFormatter)
+        return try decoder.decode(FatumUser.self, from: data)
+    }
+
     /// Loads the user from the backend API using the Cognito JWT token.
     func loadCurrentUser() async {
         error = nil
         do {
-            let idToken = try await fetchIdToken()
-
-            var request = URLRequest(url: URL(string: "\(userBaseURL)/users/me")!)
-            request.httpMethod = "GET"
-            request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-
-            let httpResponse = response as! HTTPURLResponse
-
-            guard httpResponse.statusCode == 200 else {
-                Self.logErrorResponse("GET", "/users/me", statusCode: httpResponse.statusCode, data: data)
-                throw URLError(.badServerResponse)
-            }
-
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .formatted(Self.localDateFormatter)
-            currentUser = try decoder.decode(FatumUser.self, from: data)
-
+            currentUser = try await fetchCurrentUser()
         } catch {
             print("DEBUG loadCurrentUser error: \(error)")
             self.error = error.localizedDescription
@@ -218,20 +268,15 @@ class UserProvider {
 
     // MARK: - Become Professional
 
-    /// Request body matching the backend's `InitializeProviderAvailability` DTO.
-    private struct InitializeAvailabilityRequest: Encodable {
-        let providerId: String
-    }
-
-    /// Upgrades the user to `PROFESSIONAL`, initializes their availability and
-    /// reloads `/users/me` so the UI reflects the new role.
+    /// Upgrades the user to `PROFESSIONAL` and reloads `/users/me` so the UI
+    /// reflects the new role.
     func becomeProfessional() async -> Bool {
         error = nil
-        guard let userId = currentUser?.userId else { return false }
+        guard currentUser != nil else { return false }
         do {
             let idToken = try await fetchIdToken()
 
-            // 1. PUT /users/upgrade (204 No Content on success)
+            // PUT /users/upgrade (204 No Content on success)
             var upgradeRequest = URLRequest(url: URL(string: "\(userBaseURL)/users/upgrade")!)
             upgradeRequest.httpMethod = "PUT"
             upgradeRequest.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
@@ -244,24 +289,10 @@ class UserProvider {
                 return false
             }
 
-            // 2. POST /provider/availability/initialize (201 Created on success)
-            var availabilityRequest = URLRequest(url: URL(string: "\(userBaseURL)/provider/availability/initialize")!)
-            availabilityRequest.httpMethod = "POST"
-            availabilityRequest.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
-            availabilityRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            availabilityRequest.httpBody = try JSONEncoder().encode(InitializeAvailabilityRequest(providerId: userId))
-
-            let (availabilityData, availabilityResponse) = try await URLSession.shared.data(for: availabilityRequest)
-            let availabilityStatus = (availabilityResponse as? HTTPURLResponse)?.statusCode ?? 0
-
-            // The role already changed on the backend, so reload regardless of the availability result.
+            // The old token still says CLIENT; the professional screens need the new one.
+            // The upgrade already happened, so a failed refresh doesn't fail it.
+            try? await refreshTokens()
             await loadCurrentUser()
-
-            guard (200...299).contains(availabilityStatus) else {
-                Self.logErrorResponse("POST", "/provider/availability/initialize", statusCode: availabilityStatus, data: availabilityData)
-                self.error = Self.parseErrorMessage(from: availabilityData) ?? "Error del servidor (\(availabilityStatus))"
-                return false
-            }
             return true
         } catch {
             print("DEBUG becomeProfessional error: \(error)")

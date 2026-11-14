@@ -9,6 +9,7 @@ import SwiftUI
 
 struct UserProfileHeader: View {
     @Environment(UserProvider.self) private var userProvider
+    @Environment(ScoreProvider.self) private var scoreProvider
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     // Profile image (read-only here; it is changed from ManageProfileScreen)
@@ -24,6 +25,12 @@ struct UserProfileHeader: View {
 
     private var user: FatumUser? {
         userProvider.currentUser
+    }
+
+    /// The user's average rating, or a dash until it loads.
+    private var ratingText: String {
+        guard let userId = user?.userId, let average = scoreProvider.userAverages[userId] else { return "—" }
+        return average.formatted(.number.precision(.fractionLength(1)))
     }
 
     var body: some View {
@@ -44,13 +51,15 @@ struct UserProfileHeader: View {
 
                 // Row 2: Rating + star icon
                 HStack(spacing: layout.spacingSmall) {
-                    Text("0.0")
+                    Text(ratingText)
                         .fatumStyle(.caption)
                         .foregroundStyle(.text)
 
                     Image(systemName: "star.fill")
                         .foregroundStyle(.text)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Calificación \(ratingText) de 5")
             }
 
             Spacer()
@@ -68,6 +77,11 @@ struct UserProfileHeader: View {
         )
         .task {
             await loadExistingProfileImage()
+        }
+        // Refetched every time the profile shows, so new ratings appear.
+        .task(id: user?.userId) {
+            guard let userId = user?.userId else { return }
+            await scoreProvider.loadUserScore(userId: userId)
         }
     }
 
@@ -125,4 +139,5 @@ struct UserProfileHeader: View {
     UserProfileHeader()
         .background(.brandSecondary)
         .environment(provider)
+        .environment(ScoreProvider())
 }

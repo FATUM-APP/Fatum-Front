@@ -156,7 +156,7 @@ struct ConfirmationView: View {
             }
 
             // Step 2: sign in. On success FatumApp shows MainTabView on its own.
-            let signedIn = await userProvider.signIn(email: email, password: password)
+            let signedIn = await userProvider.signIn(email: email, password: password, isNewAccount: true)
             isLoading = false
             if !signedIn {
                 signInErrorMessage = userProvider.error ?? "Inicia sesión con tu correo y contraseña."

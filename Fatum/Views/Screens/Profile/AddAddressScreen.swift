@@ -12,12 +12,12 @@ import SwiftUI
 /// trimmed and lowercased, defaulting to the residence when none is given.
 ///
 /// Saving is two steps: create the address, then (if the switch is on) mark it
-/// as principal. On success `onSaved` receives a message for the parent to show
-/// and the screen dismisses; on failure the error is shown in a toast here.
+/// as principal. Then `onSaved` is called (with an error only if the principal
+/// step failed) and the screen dismisses; if creating fails, the error is shown in a toast here.
 struct AddAddressScreen: View {
-    /// Called after the address was created, before dismissing. The message
-    /// summarises the result, including a partial failure of the principal step.
-    var onSaved: (_ message: String) -> Void
+    /// Called after the address was created, before dismissing. `errorMessage`
+    /// is only set when the principal step failed; success shows no toast.
+    var onSaved: (_ errorMessage: String?) -> Void
 
     @Environment(AddressProvider.self) private var addressProvider
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -201,17 +201,16 @@ struct AddAddressScreen: View {
             // Step 2: mark it as principal, now that it exists in the list.
             // Use the alias exactly as the backend stored it: trimmed and
             // lowercased, or the residence when none was typed.
-            var resultMessage = "Dirección guardada"
+            var errorMessage: String? = nil
             if setAsPrincipal {
                 let storedAlias = body.alias?.lowercased() ?? body.residence
-                let madePrincipal = await addressProvider.makePrincipal(alias: storedAlias)
-                resultMessage = madePrincipal
-                    ? "Dirección guardada como principal"
-                    : "Dirección guardada, pero no se pudo establecer como principal"
+                if await !addressProvider.makePrincipal(alias: storedAlias) {
+                    errorMessage = "Dirección guardada, pero no se pudo establecer como principal"
+                }
             }
 
             isLoading = false
-            onSaved(resultMessage)
+            onSaved(errorMessage)
             dismiss()
         }
     }

@@ -115,9 +115,9 @@ struct ProfileScreen: View {
         Task {
             let success = await userProvider.becomeProfessional()
             isUpgrading = false
-            toastMessage = success
-                ? "Ahora eres profesional"
-                : userProvider.error ?? "No se pudo completar la solicitud"
+            // Only errors get a toast; the new options are the confirmation.
+            guard !success else { return }
+            toastMessage = userProvider.error ?? "No se pudo completar la solicitud"
             showToast = true
         }
     }
@@ -130,4 +130,5 @@ struct ProfileScreen: View {
     }
     .environment(Router<ProfileRoute>())
     .environment(UserProvider())
+    .environment(ScoreProvider())
 }

@@ -164,8 +164,8 @@ struct HomeContentView<Route: Hashable>: View {
         }
         // Same flow as in `AddressesScreen`; `createAddress` reloads this provider's list.
         .fullScreenCover(isPresented: $showAddAddress) {
-            AddAddressScreen { message in
-                showMessage(message)
+            AddAddressScreen { errorMessage in
+                if let errorMessage { showMessage(errorMessage) }
             }
             .environment(addressProvider)
         }

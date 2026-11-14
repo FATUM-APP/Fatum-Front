@@ -16,14 +16,14 @@ struct ServiceCardView: View {
     let service: FatumItem
     /// First photo of the service (`CatalogProvider.coverImageURLs`); a placeholder shows while it's `nil`.
     var imageURL: String? = nil
-    /// Placeholder until services have real ratings.
-    var rating: Double = 5
     /// Called with `true` to activate and `false` to deactivate the service.
     var onSetActive: ((Bool) -> Void)? = nil
     /// Shows a filled heart at the top right (clients only; the provider's own cards have the menu there).
     var isFavorite: Bool = false
 
     @Environment(\.horizontalSizeClass) private var sizeClass
+    /// Optional so the card still works (with a dash) where no provider is injected, like previews.
+    @Environment(ScoreProvider.self) private var scoreProvider: ScoreProvider?
 
     private let imageSize: CGFloat = 110
     private let imageCornerRadius: CGFloat = 12
@@ -36,6 +36,12 @@ struct ServiceCardView: View {
     /// "Presencial · 1h 30m", or "Presencial · N/A" when there is no estimated time.
     private var detailsLine: String {
         "\(service.jobTypeDisplay) · \(service.estimatedTimeDisplay ?? "N/A")"
+    }
+
+    /// The service's average rating, or a dash until it loads.
+    private var ratingText: String {
+        guard let serviceId = service.id, let average = scoreProvider?.serviceAverages[serviceId] else { return "—" }
+        return average.formatted(.number.precision(.fractionLength(1)))
     }
 
     /// The status tag shows only on the provider's own services.
@@ -55,11 +61,11 @@ struct ServiceCardView: View {
                         .foregroundStyle(.text)
                         .lineLimit(2)
 
-                    Label(rating.formatted(.number.precision(.fractionLength(1))), systemImage: "star.fill")
+                    Label(ratingText, systemImage: "star.fill")
                         .fatumStyle(.footer)
                         .fontWeight(.bold)
                         .foregroundStyle(.text)
-                        .accessibilityLabel("Calificación \(rating.formatted()) de 5")
+                        .accessibilityLabel("Calificación \(ratingText) de 5")
 
                     HStack(alignment: .firstTextBaseline, spacing: layout.tiny) {
                         // Same text style as the price, so the icon scales with it.
@@ -124,6 +130,11 @@ struct ServiceCardView: View {
                 let activate = status == .INACTIVE
                 Button(activate ? "Activar" : "Desactivar") { onSetActive(activate) }
             }
+        }
+        // Fetched once per service; later appearances reuse the cached score.
+        .task(id: service.id) {
+            guard let serviceId = service.id else { return }
+            await scoreProvider?.loadServiceScore(serviceId: serviceId)
         }
     }
 

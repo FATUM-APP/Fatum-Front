@@ -126,8 +126,8 @@ struct AddressesScreen<Route: Hashable>: View {
         }
         // Slides up from the bottom and covers the whole screen; the X inside dismisses it.
         .fullScreenCover(isPresented: $showAddAddress) {
-            AddAddressScreen { message in
-                showMessage(message)
+            AddAddressScreen { errorMessage in
+                if let errorMessage { showMessage(errorMessage) }
             }
             .environment(addressProvider)
         }

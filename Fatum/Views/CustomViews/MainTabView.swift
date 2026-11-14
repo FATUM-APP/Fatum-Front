@@ -19,6 +19,8 @@ struct MainTabView: View {
     @State private var providerRouter: Router<ProviderRoute>
     /// Shared by Home, "Favoritos" and the service page.
     @State private var favoritesProvider = FavoritesProvider()
+    /// Ratings for the service cards and the profile header.
+    @State private var scoreProvider = ScoreProvider()
 
     private var isProfessional: Bool {
         userProvider.currentUser?.role == .professional
@@ -33,6 +35,7 @@ struct MainTabView: View {
         .environment(profileRouter)
         .environment(providerRouter)
         .environment(favoritesProvider)
+        .environment(scoreProvider)
         // Loaded once up front so Home's cards know which services are favorites.
         .task(id: userProvider.currentUser?.userId) {
             guard let clientId = userProvider.currentUser?.userId else { return }

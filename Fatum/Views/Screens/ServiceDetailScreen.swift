@@ -75,6 +75,7 @@ struct ServiceDetailScreen<Route: Hashable>: View {
                     onHire: hire,
                     checkAvailability: availabilityCheck,
                     categorySlug: service.category,
+                    serviceId: service.id,
                     status: status,
                     isUpdatingStatus: isUpdatingStatus,
                     onToggleActive: setActive,

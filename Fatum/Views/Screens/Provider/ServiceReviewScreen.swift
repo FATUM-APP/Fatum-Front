@@ -54,6 +54,8 @@ struct ServiceReviewScreen: View {
     /// Category slug of a published service (`FatumItem.category`), shown in the
     /// chip in `.edit` and `.client`. In `.create` the chip shows `draft.category`'s name.
     var categorySlug: String? = nil
+    /// Id of a published service, used to load its real rating in `.edit` and `.client`.
+    var serviceId: String? = nil
     /// Status of a published service, shown next to the category chip in `.edit` only.
     var status: ServiceStatus? = nil
     var isUpdatingStatus: Bool = false
@@ -68,6 +70,8 @@ struct ServiceReviewScreen: View {
     var onPublish: () -> Void = {}
 
     @Environment(UserProvider.self) private var userProvider
+    /// Optional so `.create` and previews work without it.
+    @Environment(ScoreProvider.self) private var scoreProvider: ScoreProvider?
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private enum EditSection: Identifiable {
@@ -139,8 +143,27 @@ struct ServiceReviewScreen: View {
 
     private static let hiringSectionID = "hiringSection"
 
-    /// Placeholder until the service has real reviews.
-    private let placeholderRating = 5
+    /// Shown while creating, since a new service has no ratings yet.
+    private let placeholderRating: Double = 5
+
+    /// The rating to show: the placeholder in `.create`, otherwise the
+    /// service's real average, or `nil` until it loads.
+    private var rating: Double? {
+        guard mode != .create else { return placeholderRating }
+        return serviceId.flatMap { scoreProvider?.serviceAverages[$0] }
+    }
+
+    private var ratingText: String {
+        rating?.formatted(.number.precision(.fractionLength(1))) ?? "—"
+    }
+
+    /// Filled, half or empty star for position `index` (0...4), rounding the rating to the nearest half.
+    private func starSymbol(at index: Int) -> String {
+        let halves = Int(((rating ?? 0) * 2).rounded())
+        if halves >= (index + 1) * 2 { return "star.fill" }
+        if halves == index * 2 + 1 { return "star.leadinghalf.filled" }
+        return "star"
+    }
 
     /// Only the provider can change the service; clients just see it.
     private var canEdit: Bool {
@@ -391,14 +414,14 @@ struct ServiceReviewScreen: View {
             // Rating | provider | reviews
             HStack(spacing: 0) {
                 VStack(spacing: layout.tiny) {
-                    Text("\(placeholderRating).0")
+                    Text(ratingText)
                         .fatumStyle(.subheader)
                         .fontWeight(.bold)
                         .foregroundStyle(.text)
 
                     HStack(spacing: layout.tiny) {
-                        ForEach(0..<placeholderRating, id: \.self) { _ in
-                            Image(systemName: "star.fill")
+                        ForEach(0..<5, id: \.self) { index in
+                            Image(systemName: starSymbol(at: index))
                                 .font(.caption2)
                                 .foregroundStyle(.text)
                         }
@@ -406,7 +429,12 @@ struct ServiceReviewScreen: View {
                 }
                 .frame(maxWidth: .infinity)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Calificación \(placeholderRating) de 5")
+                .accessibilityLabel("Calificación \(ratingText) de 5")
+                // Refetched on every visit, so the page shows the latest ratings.
+                .task(id: serviceId) {
+                    guard mode != .create, let serviceId else { return }
+                    await scoreProvider?.loadServiceScore(serviceId: serviceId, refresh: true)
+                }
 
                 verticalDivider
 
