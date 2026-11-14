@@ -10,6 +10,8 @@ import SwiftUI
 struct MainTabView: View {
     @Environment(UserProvider.self) private var userProvider
     @State private var selectedTab = 0
+    /// Which calendar a professional sees, picked with `CalendarSideMenu`.
+    @State private var calendarSide: ConfirmingParty = .PROVIDER
 
     private var isProfessional: Bool {
         userProvider.currentUser?.role == .professional
@@ -37,7 +39,14 @@ struct MainTabView: View {
             }
 
             Tab(value: 2) {
-                BuildingView(name: "Calendario")
+                // Professionals switch sides with the menu; clients only have their own calendar.
+                if !isProfessional {
+                    ClientCalendarScreen()
+                } else if calendarSide == .PROVIDER {
+                    CalendarScreen(side: $calendarSide)
+                } else {
+                    ClientCalendarScreen(side: $calendarSide)
+                }
             } label: {
                 Image(systemName: "calendar")
                 Text("Calendario")

@@ -5,8 +5,7 @@
 
 import SwiftUI
 
-/// A service's status as a tag: a dot and a tinted background in the status
-/// color, with the label in the text color so it stays readable on every tint.
+/// A service's status as a tag: the label in the text color on the status color.
 ///
 /// With `onToggleActive`, holding the tag activates an inactive service or
 /// deactivates an active one. Services in review or suspended can't be changed,
@@ -23,7 +22,6 @@ struct ServiceStatusTag: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private let cornerRadius: CGFloat = 12
-    private let dotSize: CGFloat = 8
 
     private var layout: ResponsiveLayout {
         ResponsiveLayout(isCompact: sizeClass == .compact)
@@ -44,11 +42,6 @@ struct ServiceStatusTag: View {
                 ProgressView()
                     .controlSize(.mini)
                     .tint(.text)
-            } else {
-                Circle()
-                    .fill(status.color)
-                    .frame(width: dotSize, height: dotSize)
-                    .accessibilityHidden(true)
             }
 
             Text(status.displayName)
@@ -58,7 +51,7 @@ struct ServiceStatusTag: View {
         }
         .frame(minHeight: minHeight)
         .padding(layout.smallPadding)
-        .background(status.color.opacity(0.18), in: RoundedRectangle(cornerRadius: cornerRadius))
+        .background(status.color, in: RoundedRectangle(cornerRadius: cornerRadius))
         .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
         .onLongPressGesture {
             guard canToggle else { return }

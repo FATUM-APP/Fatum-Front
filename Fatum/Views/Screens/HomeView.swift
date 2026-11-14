@@ -193,18 +193,22 @@ struct HomeContentView<Route: Hashable>: View {
                     .foregroundStyle(.text)
             }
             .accessibilityLabel("Mis órdenes")
+            // The menu's text and icons in the text color instead of the accent color.
+            .tint(.text)
             .contextMenu {
                 if isProfessional {
                     Button {
                         router.push(ordersRoute(.PROVIDER))
                     } label: {
                         Label("Como profesional", systemImage: "briefcase")
+                            .foregroundStyle(.text)
                     }
 
                     Button {
                         router.push(ordersRoute(.CUSTOMER))
                     } label: {
                         Label("Como cliente", systemImage: "bag")
+                            .foregroundStyle(.text)
                     }
                 }
             }

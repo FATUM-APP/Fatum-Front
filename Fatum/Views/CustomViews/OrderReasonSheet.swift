@@ -107,7 +107,7 @@ struct OrderReasonSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Image(systemName: selection == option ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(.brandPrimary)
+                    .foregroundStyle(.text)
             }
             .padding(layout.internalPadding)
             .contentShape(Rectangle())

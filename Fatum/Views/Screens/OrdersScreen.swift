@@ -31,6 +31,8 @@ struct OrdersScreen<Route: Hashable>: View {
     @State private var orderToAccept: FatumOrder? = nil
     /// The order whose reason is shown in the "Ver razón" alert.
     @State private var reasonToShow: FatumOrder? = nil
+    /// The order shown in `OrderDetailSheet` from its info button.
+    @State private var orderToShow: FatumOrder? = nil
     @State private var showToast = false
     @State private var toastMessage: String = ""
 
@@ -156,18 +158,43 @@ struct OrdersScreen<Route: Hashable>: View {
                 run(.accept, on: order, estimatedTime: minutes)
             }
         }
-        .alert(
-            "Razón",
-            isPresented: Binding(
-                get: { reasonToShow != nil },
-                set: { if !$0 { reasonToShow = nil } }
-            ),
-            presenting: reasonToShow
-        ) { _ in
-            Button("Cerrar", role: .cancel) {}
-        } message: { order in
-            Text(order.reason ?? "")
+        .sheet(item: $reasonToShow) { order in
+            reasonSheet(order.reason ?? "")
         }
+        .sheet(item: $orderToShow) { order in
+            if let orderId = order.id {
+                OrderDetailSheet(orderId: orderId)
+            }
+        }
+    }
+
+    /// The order's reason in a small sheet, closed with the glass X at the top left.
+    private func reasonSheet(_ reason: String) -> some View {
+        VStack(alignment: .leading, spacing: layout.spacingMedium) {
+            Button {
+                reasonToShow = nil
+            } label: {
+                Image(systemName: "xmark")
+                    .fontWeight(.bold)
+                    .foregroundStyle(.text)
+                    .frame(width: 38, height: 38)
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel("Cerrar")
+
+            ScrollView {
+                Text(reason)
+                    .fatumStyle(.body)
+                    .foregroundStyle(.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .screenPadding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .presentationDetents([.fraction(0.3), .medium])
+        .presentationBackground(.brandSecondary)
     }
 
     // MARK: - Content
@@ -273,9 +300,9 @@ struct OrdersScreen<Route: Hashable>: View {
     /// - PENDING: the provider accepts or rejects; the client sees "Iniciar",
     ///   which can't slide yet.
     /// - ACCEPTED: both confirm the start or report it wasn't delivered.
-    /// - DELIVERING: both confirm the delivery or report it wasn't delivered.
-    /// - COMPLETED: both confirm the payment or report a problem, until both confirmed.
-    /// - Every other status: none.
+    /// - DELIVERING: both confirm the delivery or report it wasn't delivered;
+    ///   once both confirmed it, both confirm the payment or report a problem.
+    /// - Every other status, COMPLETED included: none.
     ///
     /// Once the user answered a stage, the slider stays visible but disabled
     /// until the other party answers too.
@@ -296,15 +323,17 @@ struct OrdersScreen<Route: Hashable>: View {
                 isEnabled: canAnswer(order, stage: .START)
             )
         case .DELIVERING:
-            return SliderSpec(
-                positiveTitle: "Entregado",
-                positive: .confirm(.COMPLETION),
-                negativeTitle: "No entregado",
-                negative: .deny(.COMPLETION),
-                isEnabled: canAnswer(order, stage: .COMPLETION)
-            )
-        case .COMPLETED:
-            guard !isPaymentConfirmed(order) else { return nil }
+            // The order stays DELIVERING through both steps; the backend only
+            // moves it to COMPLETED once both parties confirmed the payment.
+            guard isCompletionConfirmed(order) else {
+                return SliderSpec(
+                    positiveTitle: "Entregado",
+                    positive: .confirm(.COMPLETION),
+                    negativeTitle: "No entregado",
+                    negative: .deny(.COMPLETION),
+                    isEnabled: canAnswer(order, stage: .COMPLETION)
+                )
+            }
             return SliderSpec(
                 positiveTitle: "Confirmar pago",
                 positive: .confirm(.PAYMENT),
@@ -312,7 +341,7 @@ struct OrdersScreen<Route: Hashable>: View {
                 negative: .deny(.PAYMENT),
                 isEnabled: canAnswer(order, stage: .PAYMENT)
             )
-        case .REJECTED, .NOT_DELIVERED, .CANCELLED, .DISPUTED, .SOLVED, .REFUNDED:
+        case .COMPLETED, .REJECTED, .NOT_DELIVERED, .NOT_PAYED, .CANCELLED, .DISPUTED, .SOLVED, .REFUNDED:
             return nil
         }
     }
@@ -337,8 +366,8 @@ struct OrdersScreen<Route: Hashable>: View {
         order.answer(of: side, for: stage) == nil
     }
 
-    private func isPaymentConfirmed(_ order: FatumOrder) -> Bool {
-        order.paymentConfirmation.byCustomer == true && order.paymentConfirmation.byProvider == true
+    private func isCompletionConfirmed(_ order: FatumOrder) -> Bool {
+        order.completionConfirmation.byCustomer == true && order.completionConfirmation.byProvider == true
     }
 
     // MARK: - Actions
@@ -434,8 +463,10 @@ struct OrdersScreen<Route: Hashable>: View {
         await orderProvider.loadOrders(userId: user.userId, side: side)
     }
 
-    /// TODO: show the order's details.
-    private func showInfo(for order: FatumOrder) {}
+    private func showInfo(for order: FatumOrder) {
+        guard order.id != nil else { return }
+        orderToShow = order
+    }
 
     private func showMessage(_ message: String) {
         toastMessage = message

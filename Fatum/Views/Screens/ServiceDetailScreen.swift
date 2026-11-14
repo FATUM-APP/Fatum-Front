@@ -72,6 +72,7 @@ struct ServiceDetailScreen<Route: Hashable>: View {
                     providerId: service.providerId,
                     isHiring: isHiring,
                     onHire: hire,
+                    checkAvailability: availabilityCheck,
                     categorySlug: service.category,
                     status: status,
                     isUpdatingStatus: isUpdatingStatus,
@@ -199,6 +200,22 @@ struct ServiceDetailScreen<Route: Hashable>: View {
                 showMessage(orderProvider.error ?? "No se pudo contratar el servicio")
             }
         }
+    }
+
+    /// `GET /order/availability` for the chosen date, with the service's estimated
+    /// time as the duration. `nil` when the check fails.
+    /// Only clients see the availability tag.
+    private var availabilityCheck: ((Date) async -> Bool?)? {
+        guard mode == .client else { return nil }
+        return { booking in await checkAvailability(booking) }
+    }
+
+    private func checkAvailability(_ booking: Date) async -> Bool? {
+        await orderProvider.checkAvailability(
+            providerId: service.providerId,
+            booking: booking,
+            durationMinutes: service.defaultEstimatedTime
+        )?.available
     }
 
     private func showMessage(_ message: String) {

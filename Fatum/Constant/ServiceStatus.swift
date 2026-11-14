@@ -32,13 +32,12 @@ enum ServiceStatus: String, Codable, CaseIterable {
         }
     }
 
-    /// One color per status for its tag.
+    /// Background of the status tag; its text uses `.text`.
     var color: Color {
         switch self {
-        case .ACTIVE: .green
-        case .INACTIVE: .gray
-        case .IN_REVIEW: .orange
-        case .SUSPENDED: .red
+        case .ACTIVE: .fatumAccent
+        case .INACTIVE: .inactive
+        case .IN_REVIEW, .SUSPENDED: .special
         }
     }
 

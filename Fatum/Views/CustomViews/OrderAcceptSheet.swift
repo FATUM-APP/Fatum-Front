@@ -7,8 +7,12 @@ import SwiftUI
 
 /// Asks the provider how long the order will take before accepting it.
 /// The field only takes digits, so the time can't be negative; "Aceptar"
-/// stays disabled until there is one, then passes the minutes to `onAccept` and closes.
+/// stays disabled until there is one within `maxMinutes`, then passes the
+/// minutes to `onAccept` and closes.
 struct OrderAcceptSheet: View {
+    /// The backend rejects more than a day (`Order.estimatedTime`, `MAX_ESTIMATED_TIME`).
+    static let maxMinutes = 1440
+
     /// The order's current estimate (from the service), prefilled in the field.
     var initialMinutes: Int? = nil
     let onAccept: (Int) -> Void
@@ -22,8 +26,13 @@ struct OrderAcceptSheet: View {
         ResponsiveLayout(isCompact: sizeClass == .compact)
     }
 
+    /// `nil` while the field is empty or above `maxMinutes`.
     private var minutes: Int? {
-        Int(minutesText)
+        Int(minutesText).flatMap { $0 <= Self.maxMinutes ? $0 : nil }
+    }
+
+    private var isOverLimit: Bool {
+        (Int(minutesText) ?? 0) > Self.maxMinutes
     }
 
     var body: some View {
@@ -34,11 +43,17 @@ struct OrderAcceptSheet: View {
                     placeholder: "Ej. 60",
                     text: $minutesText,
                     icon: "clock",
-                    maxLength: 5,
+                    maxLength: 4,
                     keyboardType: .numberPad,
                     submitLabel: .done,
                     allowedCharacters: { _, newValue in newValue.filter(\.isNumber) }
                 )
+
+                Text(isOverLimit
+                     ? "El tiempo no puede superar \(Self.maxMinutes) minutos (24 h)"
+                     : "Máximo \(Self.maxMinutes) minutos (24 h)")
+                    .fatumStyle(.footer)
+                    .foregroundStyle(.text)
 
                 Button("Aceptar") {
                     guard let minutes else { return }

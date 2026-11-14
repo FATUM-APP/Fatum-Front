@@ -48,6 +48,9 @@ struct ServiceReviewScreen: View {
     var isHiring: Bool = false
     /// Called by "Contratar" in `.client` mode once every question is answered.
     var onHire: (HireRequest) -> Void = { _ in }
+    /// In `.client` mode, checks whether the provider is free at the chosen date:
+    /// `true` or `false`, or `nil` when the check fails. Without it there's no tag.
+    var checkAvailability: ((Date) async -> Bool?)? = nil
     /// Category slug of a published service (`FatumItem.category`), shown in the
     /// chip in `.edit` and `.client`. In `.create` the chip shows `draft.category`'s name.
     var categorySlug: String? = nil
@@ -85,6 +88,22 @@ struct ServiceReviewScreen: View {
     /// Answers keyed by `FixedQuestion.question`.
     @State private var answers: [String: Set<String>] = [:]
     @State private var requirements: String = ""
+
+    private enum Availability {
+        case checking
+        case available
+        case unavailable
+        /// The request failed, so the slot is unknown.
+        case failed
+    }
+
+    /// Result of `checkAvailability` for `selectedDate`; `nil` when there's no check, which hides the tag.
+    @State private var availability: Availability? = nil
+
+    /// With a check, "Contratar" only works once it confirms the provider is free.
+    private var canHire: Bool {
+        checkAvailability == nil || availability == .available
+    }
 
     @State private var showToast = false
     @State private var toastMessage: String = ""
@@ -216,6 +235,19 @@ struct ServiceReviewScreen: View {
                 loadedProviderName = await profile?.name
                 providerImageURL = await imageURL
             }
+        }
+        // Runs again on every date change; the pause skips the dates scrolled past in the picker.
+        .task(id: selectedDate) {
+            guard let checkAvailability else { return }
+            availability = .checking
+            do {
+                try await Task.sleep(for: .milliseconds(500))
+            } catch {
+                return
+            }
+            let available = await checkAvailability(selectedDate)
+            guard !Task.isCancelled else { return }
+            availability = available.map { $0 ? .available : .unavailable } ?? .failed
         }
         .sheet(item: $editingSection) { section in
             editSheet(for: section)
@@ -549,6 +581,10 @@ struct ServiceReviewScreen: View {
                     .fatumStyle(.body)
                     .foregroundStyle(.text)
                     .tint(.brandPrimary)
+
+                    if let availability {
+                        availabilityTag(availability)
+                    }
                 }
             }
 
@@ -648,11 +684,6 @@ struct ServiceReviewScreen: View {
                             .fatumStyle(.footer)
                             .fontWeight(.bold)
                             .foregroundStyle(.brandSecondary)
-
-                        Image(systemName: "chevron.up")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.brandSecondary)
                     }
 
                     Text("\(selectedDate.formatted(Self.bookingDateStyle)) • \(JobType.PRESENCIAL.displayName)")
@@ -686,7 +717,10 @@ struct ServiceReviewScreen: View {
                     }
                 }
                 .buttonStyle(.fatumButton(variant: .compact))
-                .disabled(isHiring)
+                .disabled(isHiring || !canHire)
+                // `FatumButton` doesn't dim when disabled.
+                .opacity(canHire ? 1 : 0.7)
+                .accessibilityHint(hireHint)
             }
         }
         .padding(layout.internalPadding)
@@ -821,6 +855,43 @@ struct ServiceReviewScreen: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+
+    /// Why "Contratar" is disabled, for VoiceOver.
+    private var hireHint: String {
+        switch availability {
+        case .checking: "Verificando la disponibilidad del profesional"
+        case .unavailable: "El profesional no está disponible en la fecha y hora elegidas"
+        case .failed: "No se pudo verificar la disponibilidad del profesional"
+        case .available, nil: ""
+        }
+    }
+
+    /// Small tag below the date picker: the text color on `.fatumAccent`, `.inactive` or `.special`, like `ServiceStatusTag`.
+    private func availabilityTag(_ availability: Availability) -> some View {
+        let (title, color): (String, Color) = switch availability {
+        case .checking: ("Verificando…", .inactive)
+        case .available: ("Disponible", .fatumAccent)
+        case .unavailable: ("No disponible", .inactive)
+        case .failed: ("No se pudo verificar", .special)
+        }
+
+        return HStack(spacing: layout.spacingSmall) {
+            if availability == .checking {
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(.text)
+            }
+
+            Text(title)
+                .fatumStyle(.footer)
+                .foregroundStyle(.text)
+                .lineLimit(1)
+        }
+        .padding(.vertical, layout.tinyPadding - 2)
+        .padding(.horizontal, layout.tinyPadding)
+        .background(color, in: Capsule())
+        .accessibilityElement(children: .combine)
     }
 
     private var divider: some View {

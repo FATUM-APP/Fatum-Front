@@ -82,15 +82,7 @@ class OrderProvider {
     func reloadOrder(id orderId: String) async {
         guard let userId else { return }
         do {
-            let request = try await authorizedRequest(path: "/\(orderId)", queryItems: [])
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard (200...299).contains(statusCode) else {
-                let body = String(data: data, encoding: .utf8) ?? "<\(data.count) bytes>"
-                print("DEBUG GET /order/\(orderId) HTTP \(statusCode) response: \(body)")
-                throw OrderError(message: "HTTP \(statusCode)")
-            }
-            let detail = try JSONDecoder().decode(FatumOrderDetail.self, from: data)
+            let detail = try await fetchDetail(id: orderId)
 
             let belongsToSide = party == .PROVIDER ? detail.providerId == userId : detail.clientId == userId
             guard belongsToSide else { return }
@@ -106,6 +98,37 @@ class OrderProvider {
             print("DEBUG reload order \(orderId) error: \(error)")
             await refresh()
         }
+    }
+
+    /// `GET /order/{id}`: the full order, e.g. for `OrderDetailSheet` or the calendar's cards.
+    func fetchDetail(id orderId: String) async throws -> FatumOrderDetail {
+        let request = try await authorizedRequest(path: "/\(orderId)", queryItems: [])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200...299).contains(statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? "<\(data.count) bytes>"
+            print("DEBUG GET /order/\(orderId) HTTP \(statusCode) response: \(body)")
+            throw OrderError(message: Self.parseErrorMessage(from: data).flatMap { $0.isEmpty ? nil : $0 } ?? "Error del servidor (\(statusCode))")
+        }
+        return try JSONDecoder().decode(FatumOrderDetail.self, from: data)
+    }
+
+    /// `GET /order/client?status=`: the client's orders in one status, without
+    /// touching `orders`. Used by the client's calendar.
+    func fetchClientOrders(clientId: String, status: OrderStatus) async throws -> [FatumOrder] {
+        let request = try await authorizedRequest(path: "/client", queryItems: [
+            URLQueryItem(name: "clientId", value: clientId),
+            URLQueryItem(name: "status", value: status.rawValue)
+        ])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200...299).contains(statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? "<\(data.count) bytes>"
+            print("DEBUG GET /order/client?status=\(status.rawValue) HTTP \(statusCode) response: \(body)")
+            throw OrderError(message: Self.parseErrorMessage(from: data) ?? "Error del servidor (\(statusCode))")
+        }
+        let body = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return (body.isEmpty || body == "null") ? [] : try JSONDecoder().decode([FatumOrder].self, from: data)
     }
 
     private func fetchOrders(userId: String, side: ConfirmingParty) async throws -> [FatumOrder] {
@@ -311,6 +334,44 @@ class OrderProvider {
             print("DEBUG POST /order/book error: \(error)")
             self.error = error.localizedDescription
             return false
+        }
+    }
+
+    // MARK: - Availability
+
+    /// Mirrors the backend's `AvailabilityResponse`; only `available` is used.
+    /// `reason` is the `AvailabilityReason` (`LEAD_TIME`, `UNAVAILABLE_RANGE`, `OVERLAP`,
+    /// `OUT_OF_SCHEDULE`), kept as a `String` so a new case doesn't break decoding.
+    struct AvailabilityResponse: Decodable {
+        let available: Bool
+        let reason: String?
+    }
+
+    /// `GET /order/availability`. Returns `nil` when the check fails, so the
+    /// caller can treat the slot as unknown instead of unavailable.
+    func checkAvailability(providerId: String, booking: Date, durationMinutes: Int?) async -> AvailabilityResponse? {
+        var queryItems = [
+            URLQueryItem(name: "providerId", value: providerId),
+            URLQueryItem(name: "booking", value: BookServiceRequest.localDateTime(booking))
+        ]
+        if let durationMinutes {
+            queryItems.append(URLQueryItem(name: "durationMinutes", value: String(durationMinutes)))
+        }
+
+        do {
+            let request = try await authorizedRequest(path: "/availability", queryItems: queryItems)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200...299).contains(statusCode) else {
+                let body = String(data: data, encoding: .utf8) ?? "<\(data.count) bytes>"
+                print("DEBUG GET /order/availability HTTP \(statusCode) response: \(body)")
+                return nil
+            }
+            return try JSONDecoder().decode(AvailabilityResponse.self, from: data)
+        } catch {
+            guard !Self.isCancellation(error) else { return nil }
+            print("DEBUG GET /order/availability error: \(error)")
+            return nil
         }
     }
 

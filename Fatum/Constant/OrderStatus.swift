@@ -12,6 +12,8 @@ enum OrderStatus: String, Codable, CaseIterable {
     case REJECTED
     case DELIVERING
     case NOT_DELIVERED
+    /// Both parties denied the payment.
+    case NOT_PAYED
     case COMPLETED
     case CANCELLED
     case DISPUTED
@@ -26,6 +28,7 @@ enum OrderStatus: String, Codable, CaseIterable {
         case .REJECTED: "Rechazada"
         case .DELIVERING: "En curso"
         case .NOT_DELIVERED: "No entregada"
+        case .NOT_PAYED: "No pagada"
         case .COMPLETED: "Completada"
         case .CANCELLED: "Cancelada"
         case .DISPUTED: "En revisión"
@@ -63,7 +66,7 @@ enum OrderFilter: String, CaseIterable {
     var statuses: Set<OrderStatus> {
         switch self {
         case .pending: [.PENDING, .ACCEPTED, .DELIVERING]
-        case .completed: [.COMPLETED, .REJECTED, .NOT_DELIVERED, .CANCELLED, .SOLVED, .REFUNDED]
+        case .completed: [.COMPLETED, .REJECTED, .NOT_DELIVERED, .NOT_PAYED, .CANCELLED, .SOLVED, .REFUNDED]
         case .review: [.DISPUTED]
         }
     }
