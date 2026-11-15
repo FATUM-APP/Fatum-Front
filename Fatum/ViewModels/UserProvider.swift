@@ -37,18 +37,13 @@ class UserProvider {
             guard result.isSignedIn else { return false }
             if isNewAccount {
                 let user = try await fetchCurrentUser()
-                // A failed refresh only means the old token stays, like before.
-                try? await refreshTokens()
-                #if DEBUG
-                await logTokenClaims("new account")
-                #endif
+                // The Lambda adds VERIFIED after the event, not before the sign-in, so the
+                // token from the sign-in does not carry the group yet.
+                _ = await waitForGroup("VERIFIED")
                 currentUser = user
                 isCheckingSession = false
             } else {
                 await loadCurrentUser()
-                #if DEBUG
-                await logTokenClaims("sign in")
-                #endif
             }
             return isLoggedIn
         } catch let authError as AuthError {
@@ -159,6 +154,11 @@ class UserProvider {
             throw URLError(.userAuthenticationRequired)
         }
         let tokens = try cognitoSession.getCognitoTokens().get()
+        #if DEBUG
+        // Every request prints the groups of the token it is about to send, so a 403 can be
+        // matched against the claim without guessing.
+        Self.debugGroups(tokens.idToken, label: "fetchIdToken")
+        #endif
         return tokens.idToken
     }
 
@@ -169,24 +169,55 @@ class UserProvider {
         _ = try await Amplify.Auth.fetchAuthSession(options: .forceRefresh())
     }
 
+    /// Refreshes until the token carries `group`, or gives up after about seven seconds.
+    ///
+    /// Cognito writes the groups into the token when it is issued, and the Lambda that adds
+    /// them runs after the event, so the token from the sign-in does not carry them yet.
+    /// Refreshing in a loop is what closes that gap without asking the user to sign in again.
+    private func waitForGroup(_ group: String, attempts: Int = 10) async -> Bool {
+        for attempt in 0..<attempts {
+            if let token = try? await refreshedIdToken(), Self.groups(of: token).contains(group) {
+                return true
+            }
+            if attempt < attempts - 1 {
+                try? await Task.sleep(for: .milliseconds(700))
+            }
+        }
+        return false
+    }
+
+    /// Forces a new token and returns it, so the claims read next are the fresh ones.
+    private func refreshedIdToken() async throws -> String {
+        _ = try await Amplify.Auth.fetchAuthSession(options: .forceRefresh())
+        return try await fetchIdToken()
+    }
+
+    /// `cognito:groups` of a token. Decoded only to read it, never trusted for a decision.
+    private static func groups(of token: String) -> Set<String> {
+        let parts = token.split(separator: ".")
+        guard parts.count > 1 else { return [] }
+        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
+        guard let data = Data(base64Encoded: payload),
+              let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let groups = claims["cognito:groups"] as? [String] else { return [] }
+        return Set(groups)
+    }
+
     #if DEBUG
-    /// Temporary: prints the ID token's claims (never the token itself) to find
-    /// which one the catalog/score services reject with an empty 403 for new users.
-    /// Personal claims only show their name.
-    private func logTokenClaims(_ label: String) async {
-        guard let token = try? await fetchIdToken() else { return }
+    /// Groups of a token that is already in hand.
+    ///
+    /// It takes the token as a parameter instead of fetching it, so calling it from
+    /// `fetchIdToken` cannot recurse.
+    private static func debugGroups(_ token: String, label: String) {
         let parts = token.split(separator: ".")
         guard parts.count > 1 else { return }
         var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
         guard let data = Data(base64Encoded: payload),
               let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-
-        let shownClaims: Set<String> = ["cognito:groups", "custom:role", "custom:userRole", "token_use", "iat", "auth_time", "exp", "aud", "iss"]
-        let summary = claims.keys.sorted().map { key in
-            shownClaims.contains(key) ? "\(key)=\(claims[key] ?? "")" : key
-        }
-        print("DEBUG token claims (\(label)): \(summary.joined(separator: ", "))")
+        print("DEBUG groups (\(label)): \(claims["cognito:groups"] ?? "SIN CLAIM") "
+              + "token_use=\(claims["token_use"] ?? "?") sub=\(claims["sub"] ?? "?")")
     }
     #endif
 
@@ -289,9 +320,9 @@ class UserProvider {
                 return false
             }
 
-            // The old token still says CLIENT; the professional screens need the new one.
-            // The upgrade already happened, so a failed refresh doesn't fail it.
-            try? await refreshTokens()
+            // The old token still says CLIENT, and PROFESSIONAL arrives through the Lambda.
+            // Waiting for the claim is what lets the provider screens work on the first try.
+            _ = await waitForGroup("PROFESSIONAL")
             await loadCurrentUser()
             return true
         } catch {

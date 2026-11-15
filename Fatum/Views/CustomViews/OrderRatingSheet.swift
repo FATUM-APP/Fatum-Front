@@ -40,6 +40,8 @@ struct OrderRatingSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var sizeClass
+    /// Optional so previews work without it; marks the rated service's score as outdated.
+    @Environment(ScoreProvider.self) private var scoreProvider: ScoreProvider?
 
     private enum Step: Int, CaseIterable {
         case stars
@@ -406,6 +408,10 @@ struct OrderRatingSheet: View {
                 switch await ratingProvider.rate(request) {
                 case .rated, .alreadyRated:
                     sentTargets.insert(subject.target)
+                    // Home's card fetches the new average the next time it appears.
+                    if subject.target == .SERVICE {
+                        scoreProvider?.invalidateServiceScore(serviceId: subject.targetId)
+                    }
                 case .failed(let message):
                     errorMessage = message
                     return

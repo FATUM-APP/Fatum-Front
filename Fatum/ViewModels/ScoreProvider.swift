@@ -18,9 +18,10 @@ final class ScoreProvider {
     /// The part of the backend's `UserScoreResponse` / `ServiceScoreResponse` DTOs the app shows.
     private struct ScoreResponse: Decodable {
         let average: Double
+        let count: Int
 
         enum CodingKeys: String, CodingKey {
-            case average
+            case average, count
         }
 
         init(from decoder: Decoder) throws {
@@ -33,6 +34,7 @@ final class ScoreProvider {
             } else {
                 average = 0
             }
+            count = (try? container.decodeIfPresent(Int.self, forKey: .count)) ?? 0
         }
     }
 
@@ -40,36 +42,49 @@ final class ScoreProvider {
     private(set) var userAverages: [String: Double] = [:]
     /// Average by serviceId.
     private(set) var serviceAverages: [String: Double] = [:]
+    /// Number of ratings by serviceId, shown as "Reseñas" on the service page.
+    private(set) var serviceCounts: [String: Int] = [:]
 
     /// Same ALB as `CatalogProvider`.
     private let scoreBaseURL = "https://api.fatumapp.click/score"
 
     /// Service ids with a request in flight, so cards appearing together don't repeat it.
     private var loadingServiceIds: Set<String> = []
+    /// Services rated since their score was fetched. They keep showing the old
+    /// value until a card or the service page appears and fetches them again.
+    private var staleServiceIds: Set<String> = []
 
     // MARK: - Requests
 
     /// `GET /score/user?userId=...`. Always refetches, so the profile shows new ratings.
     func loadUserScore(userId: String) async {
-        if let average = await fetchAverage(path: "/user", query: URLQueryItem(name: "userId", value: userId)) {
-            userAverages[userId] = average
+        if let score = await fetchScore(path: "/user", query: URLQueryItem(name: "userId", value: userId)) {
+            userAverages[userId] = score.average
         }
     }
 
     /// `GET /score/service?serviceId=...`, skipped when the score is already
-    /// known unless `refresh` is `true` (the service page always wants the latest).
+    /// known and not stale, unless `refresh` is `true` (the service page always wants the latest).
     func loadServiceScore(serviceId: String, refresh: Bool = false) async {
-        guard refresh || serviceAverages[serviceId] == nil, !loadingServiceIds.contains(serviceId) else { return }
+        let isCached = serviceAverages[serviceId] != nil && !staleServiceIds.contains(serviceId)
+        guard refresh || !isCached, !loadingServiceIds.contains(serviceId) else { return }
         loadingServiceIds.insert(serviceId)
         defer { loadingServiceIds.remove(serviceId) }
 
-        if let average = await fetchAverage(path: "/service", query: URLQueryItem(name: "serviceId", value: serviceId)) {
-            serviceAverages[serviceId] = average
+        if let score = await fetchScore(path: "/service", query: URLQueryItem(name: "serviceId", value: serviceId)) {
+            serviceAverages[serviceId] = score.average
+            serviceCounts[serviceId] = score.count
+            staleServiceIds.remove(serviceId)
         }
     }
 
-    /// Returns the response's `average`, or `nil` on failure.
-    private func fetchAverage(path: String, query: URLQueryItem) async -> Double? {
+    /// Called after rating a service, so its cards fetch the new score the next time they appear.
+    func invalidateServiceScore(serviceId: String) {
+        staleServiceIds.insert(serviceId)
+    }
+
+    /// Returns the response, or `nil` on failure.
+    private func fetchScore(path: String, query: URLQueryItem) async -> ScoreResponse? {
         do {
             let request = try await authorizedRequest(path: path, queryItems: [query])
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -78,7 +93,7 @@ final class ScoreProvider {
                 Self.logErrorResponse("GET", "/score\(path)", statusCode: statusCode, data: data)
                 return nil
             }
-            return try JSONDecoder().decode(ScoreResponse.self, from: data).average
+            return try JSONDecoder().decode(ScoreResponse.self, from: data)
         } catch {
             print("DEBUG GET /score\(path) error: \(error)")
             return nil

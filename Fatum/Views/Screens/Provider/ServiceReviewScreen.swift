@@ -157,6 +157,12 @@ struct ServiceReviewScreen: View {
         rating?.formatted(.number.precision(.fractionLength(1))) ?? "—"
     }
 
+    /// Number of ratings: 0 while creating, otherwise the real count, or a dash until it loads.
+    private var reviewCountText: String {
+        guard mode != .create else { return "0" }
+        return serviceId.flatMap { scoreProvider?.serviceCounts[$0] }.map(String.init) ?? "—"
+    }
+
     /// Filled, half or empty star for position `index` (0...4), rounding the rating to the nearest half.
     private func starSymbol(at index: Int) -> String {
         let halves = Int(((rating ?? 0) * 2).rounded())
@@ -452,7 +458,7 @@ struct ServiceReviewScreen: View {
                 verticalDivider
 
                 VStack(spacing: layout.tiny) {
-                    Text("0")
+                    Text(reviewCountText)
                         .fatumStyle(.subheader)
                         .fontWeight(.bold)
                         .foregroundStyle(.text)
@@ -462,6 +468,7 @@ struct ServiceReviewScreen: View {
                         .foregroundStyle(.text)
                 }
                 .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
             }
         }
     }
